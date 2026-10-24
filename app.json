@@ -1,0 +1,44 @@
+{
+  "expo": {
+    "name": "Transient",
+    "slug": "transient-app",
+    "scheme": "transient",
+    "version": "1.0.0",
+    "orientation": "default",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "backgroundColor": "#f3f0ea"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "Transient uses your location to record where you are."
+      }
+    },
+    "android": {
+      "permissions": ["ACCESS_COARSE_LOCATION", "ACCESS_FINE_LOCATION"]
+    },
+    "web": {
+      "bundler": "metro",
+      "output": "single",
+      "favicon": "./assets/favicon.png",
+      "name": "Transient",
+      "shortName": "Transient",
+      "description": "A place, a time, and a few words.",
+      "themeColor": "#f3f0ea",
+      "backgroundColor": "#f3f0ea",
+      "display": "standalone",
+      "startUrl": "/",
+      "lang": "en"
+    },
+    "plugins": [
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Transient uses your location to record where you are."
+        }
+      ]
+    ]
+  }
+}
