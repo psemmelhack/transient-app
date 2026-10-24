@@ -1,6 +1,6 @@
 import { useState, type CSSProperties } from 'react';
 import { downloadBlob, fileNameFor } from '../src/export/download';
-import { canShareFiles, openEmail, openSms, sharePng } from '../src/share/share';
+import { canShareFiles, deliverImage } from '../src/share/share';
 import type { ShareEntry } from '../src/storage/library';
 import { ink, line, muted, paper, ui } from './theme';
 
@@ -17,39 +17,31 @@ export function ShareSheet({
   latitude: number;
   longitude: number;
   onClose: () => void;
-  onComplete: (entry: ShareEntry) => void;
+  onComplete: (entry: ShareEntry, delivered: 'shared' | 'downloaded') => void;
 }) {
   const [name, setName] = useState('');
-  const [address, setAddress] = useState('');
   const [busy, setBusy] = useState(false);
   const shareLabel = canShareFiles() ? 'Share' : 'Download';
 
-  async function finish(channel: ShareEntry['channel']) {
+  async function finish() {
     if (busy) return;
     setBusy(true);
     const filename = fileNameFor(capturedAt, latitude, longitude);
     try {
-      if (channel === 'share') {
-        const result = await sharePng(png, filename);
-        if (result === 'cancelled') {
-          setBusy(false);
-          return;
-        }
-        if (result === 'unsupported') downloadBlob(png, filename);
-      } else if (channel === 'sms') {
-        downloadBlob(png, filename);
-        openSms(address);
-      } else {
-        downloadBlob(png, filename);
-        openEmail(address);
+      const result = await deliverImage(png, filename, downloadBlob);
+      if (result === 'cancelled') {
+        setBusy(false);
+        return;
       }
-      onComplete({
-        id: crypto.randomUUID(),
-        at: new Date().toISOString(),
-        channel,
-        recipient: name.trim() || undefined,
-        address: address.trim() || undefined,
-      });
+      onComplete(
+        {
+          id: crypto.randomUUID(),
+          at: new Date().toISOString(),
+          channel: 'share',
+          recipient: name.trim() || undefined,
+        },
+        result === 'downloaded' ? 'downloaded' : 'shared',
+      );
     } finally {
       setBusy(false);
     }
@@ -92,24 +84,16 @@ export function ShareSheet({
             Close
           </button>
         </div>
-        <p style={{ margin: '8px 0 16px', fontFamily: ui, fontWeight: 400, fontSize: 15, color: muted }}>A name is optional. Skip it and nothing is remembered.</p>
+        <p style={{ margin: '8px 0 16px', fontFamily: ui, fontWeight: 400, fontSize: 15, color: muted }}>
+          A name is optional. Leave it blank and nothing is remembered.
+        </p>
         <label style={fieldLabel}>
           To whom
           <input value={name} onChange={(event) => setName(event.target.value)} placeholder="Name" style={field} />
         </label>
-        <label style={fieldLabel}>
-          Phone or email
-          <input value={address} onChange={(event) => setAddress(event.target.value)} placeholder="Optional" style={field} />
-        </label>
-        <div style={{ display: 'flex', gap: 18, marginTop: 18 }}>
-          <button type="button" disabled={busy} onClick={() => finish('share')} style={action}>
+        <div style={{ display: 'flex', marginTop: 18 }}>
+          <button type="button" disabled={busy} onClick={finish} style={action}>
             {shareLabel}
-          </button>
-          <button type="button" disabled={busy} onClick={() => finish('sms')} style={action}>
-            Text
-          </button>
-          <button type="button" disabled={busy} onClick={() => finish('email')} style={action}>
-            Email
           </button>
         </div>
       </div>
