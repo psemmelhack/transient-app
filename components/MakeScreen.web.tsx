@@ -167,7 +167,7 @@ export function MakeScreen({ onMap, fixture = false }: { onMap: () => void; fixt
       const frozen = freeze(moment);
       const rendered = await renderPng(frozen);
       await saveTransient(makeRecord({ moment: frozen, style, message: note, scene: rendered.scene, png: rendered.png, shares: [] }));
-      downloadBlob(rendered.png, fileNameFor(frozen.at));
+      downloadBlob(rendered.png, fileNameFor(frozen.at, frozen.latitude, frozen.longitude));
       setToast('Saved');
     } catch {
       setToast('Couldn’t make the image');
@@ -217,7 +217,7 @@ export function MakeScreen({ onMap, fixture = false }: { onMap: () => void; fixt
   const sample = shown?.source === 'example' && !fixture;
 
   return (
-    <div style={{ height: '100%', minHeight: 0, background: paper, color: ink, fontFamily: ui, fontWeight: 400 }}>
+    <div style={{ height: '100%', width: '100%', minWidth: 0, minHeight: 0, background: paper, color: ink, fontFamily: ui, fontWeight: 400 }}>
       <style>{chromeCss}</style>
       <div ref={scrollerRef} onScroll={onScroll} style={scrollerStyle}>
         <div ref={pinRef} style={{ ...pinStyle, height: box.pinHeight }}>
@@ -297,7 +297,7 @@ export function MakeScreen({ onMap, fixture = false }: { onMap: () => void; fixt
 
         <div style={{ height: box.gap, transition: 'height 320ms ease' }} />
 
-        <div ref={paramsRef} style={{ scrollMarginTop: box.pinHeight }}>
+        <div ref={paramsRef} style={{ scrollMarginTop: box.pinHeight, width: '100%', minWidth: 0, boxSizing: 'border-box' }}>
           <Parameters style={style} onChange={update} />
           <div style={{ height: Math.max(48, viewport.height - box.pinHeight) }} />
         </div>
@@ -306,8 +306,9 @@ export function MakeScreen({ onMap, fixture = false }: { onMap: () => void; fixt
       {pending && (
         <ShareSheet
           png={pending.png}
-          note={note}
           capturedAt={pending.moment.at}
+          latitude={pending.moment.latitude}
+          longitude={pending.moment.longitude}
           onClose={() => {
             setPending(null);
             setLock(null);
@@ -330,6 +331,8 @@ function freeze(moment: Moment): Moment {
 
 const scrollerStyle: CSSProperties = {
   height: '100%',
+  width: '100%',
+  minWidth: 0,
   overflowX: 'hidden',
   overflowY: 'auto',
   position: 'relative',
@@ -350,7 +353,10 @@ const headerStyle: CSSProperties = {
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'space-between',
-  padding: '0 12px 0 22px',
+  paddingTop: 0,
+  paddingBottom: 0,
+  paddingLeft: 'max(22px, env(safe-area-inset-left))',
+  paddingRight: 'max(12px, env(safe-area-inset-right))',
   boxSizing: 'border-box',
 };
 
@@ -370,8 +376,12 @@ const iconBtn: CSSProperties = {
 const dockStyle: CSSProperties = {
   maxWidth: 680,
   margin: '0 auto',
-  padding: '6px 22px 8px',
+  paddingTop: 6,
+  paddingBottom: 8,
+  paddingLeft: 'max(22px, env(safe-area-inset-left))',
+  paddingRight: 'max(22px, env(safe-area-inset-right))',
   width: '100%',
+  minWidth: 0,
   boxSizing: 'border-box',
 };
 
@@ -429,8 +439,13 @@ const toastStyle: CSSProperties = {
 };
 
 const chromeCss = `
-  button { font: inherit; color: inherit; }
+  button, input, textarea { font: inherit; color: inherit; box-sizing: border-box; max-width: 100%; }
   textarea::placeholder { color: ${muted}; }
+  .h-scroll { scrollbar-width: none; overscroll-behavior-x: contain; -webkit-overflow-scrolling: touch; }
+  .h-scroll::-webkit-scrollbar { display: none; }
+  .h-fade { position: absolute; top: 0; bottom: 4px; width: 28px; pointer-events: none; }
+  .h-fade-right { right: 0; background: linear-gradient(to right, rgba(243, 240, 234, 0), ${paper}); }
+  .h-fade-left { left: 0; background: linear-gradient(to left, rgba(243, 240, 234, 0), ${paper}); }
   .pin-fade {
     position: absolute;
     left: 0;
