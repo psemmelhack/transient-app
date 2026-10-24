@@ -1,4 +1,4 @@
-export type FontCategory = 'tall' | 'bold' | 'silky' | 'classic' | 'mono';
+export type FontCategory = 'tall' | 'bold' | 'silky' | 'classic' | 'sans' | 'mono';
 
 export type FontRole = 'display' | 'display-italic' | 'mono' | 'mono-medium';
 
@@ -7,6 +7,7 @@ export interface CssFont {
   weight: number;
   style: 'normal' | 'italic';
   variation?: string;
+  features?: string;
 }
 
 export interface FontDef {
@@ -17,6 +18,8 @@ export interface FontDef {
   weight: number;
   style: 'normal' | 'italic';
   variation?: string;
+  /** OpenType features, such as tabular figures. */
+  features?: string;
   italic: boolean;
   italicWeight?: number;
   italicVariation?: string;
@@ -28,6 +31,7 @@ export const CATEGORIES: { id: FontCategory; label: string }[] = [
   { id: 'bold', label: 'Bold / expressive' },
   { id: 'silky', label: 'Silky serif' },
   { id: 'classic', label: 'Classic' },
+  { id: 'sans', label: 'Sans' },
   { id: 'mono', label: 'Mono' },
 ];
 
@@ -154,6 +158,17 @@ export const FONTS: FontDef[] = [
     italic: false,
   },
   {
+    id: 'inter',
+    name: 'Inter',
+    family: 'Inter',
+    category: 'sans',
+    weight: 500,
+    style: 'normal',
+    variation: "'wght' 500",
+    features: '"tnum" 1, "lnum" 1',
+    italic: false,
+  },
+  {
     id: 'plex',
     name: 'IBM Plex Mono',
     family: 'IBM Plex Mono',
@@ -207,7 +222,7 @@ export function resolveFont(displayId: string, monoId: string, role: FontRole): 
   if (role === 'mono' || role === 'mono-medium') {
     const font = getFont(monoId);
     const weight = role === 'mono-medium' ? (font.mediumWeight ?? font.weight) : font.weight;
-    return { family: font.family, weight, style: 'normal', variation: font.variation };
+    return { family: font.family, weight, style: 'normal', variation: font.variation, features: font.features };
   }
   const font = getFont(displayId);
   const italic = role === 'display-italic' && font.italic;
@@ -217,6 +232,7 @@ export function resolveFont(displayId: string, monoId: string, role: FontRole): 
       weight: font.italicWeight ?? font.weight,
       style: 'italic',
       variation: font.italicVariation ?? font.variation,
+      features: font.features,
     };
   }
   return {
@@ -224,6 +240,7 @@ export function resolveFont(displayId: string, monoId: string, role: FontRole): 
     weight: font.weight,
     style: font.style,
     variation: font.variation,
+    features: font.features,
   };
 }
 
@@ -232,12 +249,15 @@ export function fontCss(font: CssFont): {
   fontWeight: number;
   fontStyle: 'normal' | 'italic';
   fontVariationSettings?: string;
+  fontFeatureSettings?: string;
 } {
-  const fallback = font.family.toLowerCase().includes('mono') ? 'monospace' : 'serif';
+  const name = font.family.toLowerCase();
+  const fallback = name.includes('mono') ? 'monospace' : name === 'inter' ? 'sans-serif' : 'serif';
   return {
     fontFamily: `'${font.family}', ${fallback}`,
     fontWeight: font.weight,
     fontStyle: font.style,
     fontVariationSettings: font.variation,
+    fontFeatureSettings: font.features,
   };
 }

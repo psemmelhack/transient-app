@@ -103,6 +103,22 @@ export type QuietBlockSpec =
       marginTop: number;
       opacity?: number;
       tracking?: number;
+    }
+  | {
+      kind: 'rows';
+      labelFont: FontRole;
+      valueFont: FontRole;
+      labelSize: number;
+      valueSize: number;
+      tracking: number;
+      lineHeight: number;
+      marginTop: number;
+      /** Vertical padding inside each row. */
+      gap: number;
+      hairline: boolean;
+      /** Tabular figures on the values, when the face supports them. */
+      tabular: boolean;
+      items: { label: string; token: Token }[];
     };
 
 export interface QuietRecipe {
@@ -116,6 +132,19 @@ export interface QuietRecipe {
   anchor: 'center' | 'end' | 'align';
   blocks: QuietBlockSpec[];
   absoluteMark?: { size: number; opacity: number; tracking?: number; bottom: number };
+  /** Optional data lines, set in the same small type as the rest of the recipe. */
+  measurementMeta?: {
+    font: FontRole;
+    size: number;
+    lineHeight: number;
+    marginTop: number;
+    opacity?: number;
+    tracking?: number;
+  };
+  /** Append optional data lines as rows on the title block. */
+  measurementRows?: boolean;
+  /** Keep the signature on the same side margin as the type. */
+  markInset?: boolean;
 }
 
 export type Recipe = PosterRecipe | QuietRecipe;
@@ -431,6 +460,187 @@ export const RECIPES: Record<string, Recipe> = {
       },
     ],
     absoluteMark: { size: 13, opacity: 0.45, tracking: 0.14, bottom: 40 },
+  },
+  'quiet-ledger': {
+    kind: 'quiet',
+    id: 'quiet-ledger',
+    safe: false,
+    nativeFormat: 'feed',
+    side: 156,
+    top: 0,
+    bottom: 0,
+    anchor: 'center',
+    blocks: [
+      {
+        kind: 'text',
+        token: 'place-full-upper',
+        font: 'mono',
+        size: 15,
+        lineHeight: 1.45,
+        tracking: 0.32,
+        marginTop: 0,
+      },
+      {
+        kind: 'coords',
+        font: 'display',
+        size: 72,
+        lineHeight: 1.12,
+        tracking: -0.02,
+        marginTop: 56,
+        sign: 'abs',
+        degree: true,
+        hemisphere: true,
+      },
+      { kind: 'rule', width: 72, height: 1, marginTop: 44, marginBottom: 32 },
+      {
+        kind: 'text',
+        token: 'date-time-quiet',
+        font: 'display',
+        size: 26,
+        lineHeight: 1.4,
+        tracking: 0.02,
+        marginTop: 0,
+      },
+      {
+        kind: 'text',
+        token: 'message',
+        font: 'display',
+        size: 32,
+        lineHeight: 1.4,
+        marginTop: 40,
+        maxWidth: 700,
+      },
+      {
+        kind: 'meta',
+        tokens: ['coords-alt', 'utc'],
+        font: 'mono',
+        size: 15,
+        lineHeight: 1.7,
+        marginTop: 52,
+        opacity: 0.86,
+        tracking: 0.03,
+      },
+    ],
+    measurementMeta: {
+      font: 'mono',
+      size: 15,
+      lineHeight: 1.7,
+      marginTop: 18,
+      opacity: 0.86,
+      tracking: 0.03,
+    },
+    absoluteMark: { size: 13, opacity: 0.55, tracking: 0.16, bottom: 56 },
+    markInset: true,
+  },
+  'quiet-boardroom': {
+    kind: 'quiet',
+    id: 'quiet-boardroom',
+    safe: false,
+    nativeFormat: 'feed',
+    side: 128,
+    top: 0,
+    bottom: 0,
+    anchor: 'center',
+    blocks: [
+      {
+        kind: 'text',
+        token: 'place-full-upper',
+        font: 'mono',
+        size: 14,
+        lineHeight: 1.45,
+        tracking: 0.34,
+        marginTop: 0,
+        opacity: 0.82,
+      },
+      {
+        kind: 'coords',
+        font: 'display',
+        size: 84,
+        lineHeight: 1.04,
+        tracking: -0.02,
+        marginTop: 44,
+        sign: 'abs',
+        degree: true,
+        hemisphere: true,
+      },
+      { kind: 'rule', width: 56, height: 1, marginTop: 40, marginBottom: 30 },
+      {
+        kind: 'text',
+        token: 'date-time-quiet',
+        font: 'display',
+        size: 28,
+        lineHeight: 1.35,
+        tracking: 0.012,
+        marginTop: 0,
+      },
+      {
+        kind: 'text',
+        token: 'message',
+        font: 'display-italic',
+        size: 40,
+        lineHeight: 1.28,
+        marginTop: 52,
+        maxWidth: 760,
+      },
+      {
+        kind: 'meta',
+        tokens: ['alt-lower', 'utc'],
+        font: 'mono',
+        size: 15,
+        lineHeight: 1.75,
+        marginTop: 48,
+        opacity: 0.78,
+        tracking: 0.03,
+      },
+    ],
+    measurementMeta: {
+      font: 'mono',
+      size: 15,
+      lineHeight: 1.75,
+      marginTop: 16,
+      opacity: 0.78,
+      tracking: 0.03,
+    },
+    absoluteMark: { size: 13, opacity: 0.5, tracking: 0.16, bottom: 56 },
+    markInset: true,
+  },
+  'quiet-title-block': {
+    kind: 'quiet',
+    id: 'quiet-title-block',
+    safe: false,
+    nativeFormat: 'feed',
+    side: 80,
+    top: 0,
+    bottom: 88,
+    anchor: 'end',
+    blocks: [
+      { kind: 'rule', width: 920, height: 2.5, marginTop: 0, marginBottom: 4 },
+      { kind: 'rule', width: 920, height: 1, marginTop: 0, marginBottom: 6 },
+      {
+        kind: 'rows',
+        labelFont: 'mono',
+        valueFont: 'mono-medium',
+        labelSize: 13,
+        valueSize: 22,
+        tracking: 0.2,
+        lineHeight: 1.2,
+        marginTop: 0,
+        gap: 12,
+        hairline: true,
+        tabular: true,
+        items: [
+          { label: 'Location', token: 'place-full-upper' },
+          { label: 'Latitude', token: 'lat-card' },
+          { label: 'Longitude', token: 'lon-card' },
+          { label: 'Date', token: 'date-compact' },
+          { label: 'Time', token: 'time-zone' },
+          { label: 'Elevation', token: 'alt-m' },
+          { label: 'UTC', token: 'utc' },
+          { label: 'Note', token: 'message' },
+        ],
+      },
+    ],
+    measurementRows: true,
   },
 };
 

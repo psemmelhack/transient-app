@@ -118,6 +118,21 @@ export type QuietBlock =
       marginTop: number;
       opacity?: number;
       tracking?: number;
+    }
+  | {
+      kind: 'rows';
+      labelFont: CssFont;
+      valueFont: CssFont;
+      labelSize: number;
+      valueSize: number;
+      tracking: number;
+      lineHeight: number;
+      marginTop: number;
+      gap: number;
+      hairline: boolean;
+      tabular: boolean;
+      color: string;
+      rows: { label: string; value: string }[];
     };
 
 export interface MarkNode {
@@ -357,18 +372,26 @@ function quietNodes(recipe: QuietRecipe, style: Style, moment: Moment, message: 
     const block = quietBlock(spec, style, moment, message);
     if (block) blocks.push(block);
   }
-  const extra = extras(style, moment);
-  if (extra.length) {
-    const meta = fontOf(style, 'mono');
-    blocks.push({
-      kind: 'meta',
-      lines: extra,
-      font: meta,
-      fontSize: 16,
-      lineHeight: 1.7,
-      marginTop: 22,
-      opacity: 0.72,
-    });
+  const measured = measurementLines(style.measurements, style.temperatureUnit, moment);
+  if (measured.length) {
+    const rowBlock = recipe.measurementRows ? blocks.find((block) => block.kind === 'rows') : undefined;
+    if (rowBlock && rowBlock.kind === 'rows') {
+      for (const line of measured) {
+        rowBlock.rows.push({ label: measurementLabel(line.id), value: measurementValue(line.id, line.text) });
+      }
+    } else {
+      const meta = recipe.measurementMeta;
+      blocks.push({
+        kind: 'meta',
+        lines: measured.map((line) => line.text),
+        font: fontOf(style, meta?.font ?? 'mono'),
+        fontSize: meta?.size ?? 16,
+        lineHeight: meta?.lineHeight ?? 1.7,
+        marginTop: meta?.marginTop ?? 22,
+        opacity: meta?.opacity ?? 0.72,
+        tracking: meta?.tracking,
+      });
+    }
   }
   const nodes: SceneNode[] = [
     {
@@ -385,7 +408,12 @@ function quietNodes(recipe: QuietRecipe, style: Style, moment: Moment, message: 
   ];
   if (recipe.absoluteMark) {
     const markBottom = native ? recipe.absoluteMark.bottom : Math.max(recipe.absoluteMark.bottom, format.inset.bottom * 0.45);
-    nodes.push(markNode(style, recipe.absoluteMark, markBottom));
+    const mark = markNode(style, recipe.absoluteMark, markBottom);
+    if (recipe.markInset) {
+      mark.left = side;
+      mark.right = side;
+    }
+    nodes.push(mark);
   }
   return nodes;
 }
@@ -441,6 +469,30 @@ function quietBlock(spec: QuietBlockSpec, style: Style, moment: Moment, message:
       marginTop: spec.marginTop,
     };
   }
+  if (spec.kind === 'rows') {
+    const rows = spec.items
+      .map((item) => {
+        const value = renderToken(item.token, moment, message);
+        return value ? { label: item.label, value } : null;
+      })
+      .filter((row): row is { label: string; value: string } => Boolean(row));
+    if (!rows.length) return null;
+    return {
+      kind: 'rows',
+      labelFont: fontOf(style, spec.labelFont),
+      valueFont: fontOf(style, spec.valueFont),
+      labelSize: spec.labelSize,
+      valueSize: spec.valueSize,
+      tracking: spec.tracking,
+      lineHeight: spec.lineHeight,
+      marginTop: spec.marginTop,
+      gap: spec.gap,
+      hairline: spec.hairline,
+      tabular: spec.tabular,
+      color: style.textColor,
+      rows,
+    };
+  }
   const lines = linesFor(spec.tokens, moment, message);
   if (!lines.length) return null;
   return {
@@ -453,6 +505,18 @@ function quietBlock(spec: QuietBlockSpec, style: Style, moment: Moment, message:
     opacity: spec.opacity,
     tracking: spec.tracking,
   };
+}
+
+function measurementLabel(id: string): string {
+  if (id === 'temperature') return 'Temperature';
+  if (id === 'sun') return 'Sun';
+  if (id === 'accuracy') return 'Accuracy';
+  return id;
+}
+
+function measurementValue(id: string, text: string): string {
+  if (id === 'sun' && text.startsWith('sun ')) return text.slice(4);
+  return text;
 }
 
 function markNode(

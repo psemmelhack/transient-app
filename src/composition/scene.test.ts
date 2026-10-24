@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { exampleMoment, EXAMPLE_INSTANT } from '../data/moment';
-import { PRESETS, styleFromPreset } from '../style/presets';
+import { contrastRatio } from '../color/contrast';
+import { PRESETS, presetById, styleFromPreset } from '../style/presets';
 import { buildScene, type FitStackNode, type FooterNode, type QuietNode } from './scene';
 
 const moment = exampleMoment(EXAMPLE_INSTANT);
@@ -60,6 +61,8 @@ describe('preset compositions', () => {
       '118.383318W',
     ]);
     expect(scene.background).toBe('#F7E4E1');
+    const mark = scene.nodes.find((node) => node.kind === 'mark');
+    expect(mark && mark.kind === 'mark' && mark.left).toBe(0);
   });
 
   it('speaks the evening on the Instrument poster', () => {
@@ -102,5 +105,96 @@ describe('preset compositions', () => {
     const footer = scene.nodes.find((node) => node.kind === 'footer') as FooterNode;
     expect(footer.extraLines.some((line) => line.includes('°F'))).toBe(true);
     expect(footer.extraLines.some((line) => line.startsWith('sun '))).toBe(true);
+  });
+
+  it('keeps the original six presets ahead of the business set', () => {
+    expect(PRESETS.slice(0, 6).map((preset) => preset.id)).toEqual(['01', '02', '03', '04', '05', '06']);
+    expect(PRESETS.map((preset) => preset.name)).toEqual([
+      'Anton',
+      'Big Shoulders',
+      'Bodoni',
+      'Instrument',
+      'Antonio',
+      'Fraunces',
+      'Ledger',
+      'Boardroom',
+      'Title block',
+    ]);
+  });
+
+  it('sets Ledger in Inter, left, with tabular figures and wide margins', () => {
+    const preset = presetById('07');
+    const scene = buildScene(styleFromPreset(preset), moment, preset.sampleMessage);
+    const quiet = scene.nodes.find((node) => node.kind === 'quiet') as QuietNode;
+    const coords = quiet.blocks.find((block) => block.kind === 'coords');
+    const time = quiet.blocks.find((block) => block.kind === 'text' && block.text.includes('October'));
+    expect(scene.background).toBe('#F5F3EE');
+    expect(scene.width).toBe(1080);
+    expect(scene.height).toBe(1350);
+    expect(quiet.align).toBe('left');
+    expect(quiet.left).toBeGreaterThanOrEqual(140);
+    expect(coords && coords.kind === 'coords' && coords.font.family).toBe('Inter');
+    expect(coords && coords.kind === 'coords' && coords.font.features).toContain('tnum');
+    expect(time && time.kind === 'text' && time.font.features).toContain('tnum');
+    const mark = scene.nodes.find((node) => node.kind === 'mark');
+    expect(mark && mark.kind === 'mark' && mark.left).toBe(quiet.left);
+    expect(contrastRatio(preset.textColor, preset.backgroundColor)).toBeGreaterThan(12);
+  });
+
+  it('sets Boardroom in Instrument Serif on navy', () => {
+    const preset = presetById('08');
+    const scene = buildScene(styleFromPreset(preset), moment, preset.sampleMessage);
+    const quiet = scene.nodes.find((node) => node.kind === 'quiet') as QuietNode;
+    const coords = quiet.blocks.find((block) => block.kind === 'coords');
+    const note = quiet.blocks.find((block) => block.kind === 'text' && block.text === preset.sampleMessage);
+    expect(scene.background).toBe('#0E1A2B');
+    expect(quiet.align).toBe('left');
+    expect(coords && coords.kind === 'coords' && coords.font.family).toBe('Instrument Serif');
+    expect(note && note.kind === 'text' && note.font.style).toBe('italic');
+    expect(contrastRatio(preset.textColor, preset.backgroundColor)).toBeGreaterThan(12);
+  });
+
+  it('sets the title block as letterspaced rows under a rule', () => {
+    const preset = presetById('09');
+    const scene = buildScene(styleFromPreset(preset), moment, preset.sampleMessage);
+    const quiet = scene.nodes.find((node) => node.kind === 'quiet') as QuietNode;
+    const rule = quiet.blocks.find((block) => block.kind === 'rule');
+    const rows = quiet.blocks.find((block) => block.kind === 'rows');
+    expect(scene.background).toBe('#E6E8EB');
+    expect(quiet.align).toBe('left');
+    expect(quiet.anchor).toBe('end');
+    expect(rule && rule.kind === 'rule' && rule.height).toBeGreaterThan(1);
+    expect(rows && rows.kind === 'rows' && rows.tracking).toBeGreaterThanOrEqual(0.18);
+    expect(rows && rows.kind === 'rows' && rows.tabular).toBe(true);
+    expect(rows && rows.kind === 'rows' && rows.valueFont.family).toBe('IBM Plex Mono');
+    expect(rows && rows.kind === 'rows' && rows.rows).toEqual([
+      { label: 'Location', value: 'REDONDO BEACH, CALIFORNIA' },
+      { label: 'Latitude', value: '33.834452\u00b0 N' },
+      { label: 'Longitude', value: '118.383318\u00b0 W' },
+      { label: 'Date', value: 'OCT 22 2026' },
+      { label: 'Time', value: '6:12 PM PDT' },
+      { label: 'Elevation', value: '18 m' },
+      { label: 'UTC', value: '2026-10-23 01:12:07 UTC' },
+      { label: 'Note', value: 'Issued for record.' },
+    ]);
+    expect(contrastRatio(preset.textColor, preset.backgroundColor)).toBeGreaterThan(10);
+  });
+
+  it('fits temperature and sun into the business presets', () => {
+    const warm = { ...moment, temperatureC: 20 };
+    for (const id of ['07', '08', '09']) {
+      const style = styleFromPreset(presetById(id));
+      style.measurements = { ...style.measurements, temperature: true, sun: true };
+      const scene = buildScene(style, warm, 'Noted.');
+      const quiet = scene.nodes.find((node) => node.kind === 'quiet') as QuietNode;
+      const text = JSON.stringify(quiet.blocks);
+      expect(text).toContain('°F');
+      expect(text).toContain('az');
+      if (id === '09') {
+        const rows = quiet.blocks.find((block) => block.kind === 'rows');
+        expect(rows && rows.kind === 'rows' && rows.rows.some((row) => row.label === 'Temperature')).toBe(true);
+        expect(rows && rows.kind === 'rows' && rows.rows.some((row) => row.label === 'Sun' && !row.value.startsWith('sun '))).toBe(true);
+      }
+    }
   });
 });
