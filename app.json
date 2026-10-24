@@ -19,6 +19,9 @@
     "android": {
       "permissions": ["ACCESS_COARSE_LOCATION", "ACCESS_FINE_LOCATION"]
     },
+    "experiments": {
+      "baseUrl": "/transient-app"
+    },
     "web": {
       "bundler": "metro",
       "output": "single",
@@ -29,7 +32,7 @@
       "themeColor": "#f3f0ea",
       "backgroundColor": "#f3f0ea",
       "display": "standalone",
-      "startUrl": "/",
+      "startUrl": "/transient-app/",
       "lang": "en"
     },
     "plugins": [

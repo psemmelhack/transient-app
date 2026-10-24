@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { LngLatBounds, Map as MapLibre, Marker } from 'maplibre-gl';
 import { listTransients, type ShareEntry, type TransientRecord } from '../src/storage/library';
 import { Icon } from './Icons';
+import { publicAssetUrl } from '../src/web/publicUrl';
 import { ink, line, mono, muted, paper, serif } from './theme';
 
 const STYLE_URL = 'https://tiles.openfreemap.org/styles/positron';
@@ -44,7 +45,7 @@ export function MapScreen({ onBack, active = true }: { onBack: () => void; activ
     if (!document.querySelector('link[data-maplibre]')) {
       const link = document.createElement('link');
       link.rel = 'stylesheet';
-      link.href = '/vendor/maplibre-gl.css';
+      link.href = publicAssetUrl('vendor/maplibre-gl.css');
       link.setAttribute('data-maplibre', '1');
       document.head.appendChild(link);
     }
