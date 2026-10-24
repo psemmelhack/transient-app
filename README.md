@@ -1,2 +1,28 @@
-# transient-app
-Capture where and when you are, add a short message, and share it as a beautiful image.
+# Transient
+
+A place, a time, and a few words. Transient records where and when you are, sets them in a type poster, and saves that poster as an image you can share.
+
+## Run
+
+```bash
+npm install
+npx expo start --web
+```
+
+Open the URL Expo prints. The first screen is the composition, a note, and Save / Share. The style you used last time is restored; a first visit starts on preset 01. Scroll, or tap the sliders icon, and the type, color, layout, and optional data lines come up underneath the preview. The preview stays pinned and updates as you change them.
+
+`?fixture=1` freezes the sample place and time (Redondo Beach, 22 Oct 2026, 6:12 PM PDT) so the screen does not ask for location. `?proof=01` through `?proof=06` render one reference poster at export size.
+
+Native projects are wired (`npm run ios`, `npm run android`) but image export and the map are built for the web.
+
+## Architecture
+
+The on-screen preview and the saved PNG are the same DOM stage, drawn at the export pixel size (Story 1080×1920, Feed 1080×1350, Square 1080×1080) and scaled with CSS for display. Poster lines are fit to the width of that stage. Save stamps GPS, time, temperature, and sun position into PNG text metadata.
+
+Last-used style lives in `localStorage`. Saved transients, including the PNG, live in IndexedDB on this device. There is no account and no backend.
+
+Optional measurements are a small plugin list (`src/data/plugins.ts`): temperature from Open-Meteo (no key; the line is omitted if the request fails) and sun azimuth and altitude computed locally from time and coordinates. Both are off until turned on in the style controls. Accuracy is shown when a GPS fix includes it.
+
+The map uses MapLibre and the OpenFreeMap Positron style. No API key.
+
+Display faces are bundled under `public/fonts` and licensed under the SIL Open Font License. The license texts are in `licenses/`.
