@@ -5,6 +5,9 @@ export type Token =
   | 'lon'
   | 'lon-minus'
   | 'lon-endash'
+  | 'lat-card'
+  | 'lon-card'
+  | 'alt-m'
   | 'coords-pair'
   | 'coords-alt'
   | 'date-compact'
@@ -174,6 +177,12 @@ export function renderToken(token: Token, moment: Moment, message: string): stri
       return t.lonMinus;
     case 'lon-endash':
       return t.lonEndash;
+    case 'lat-card':
+      return `${formatCoord(moment.latitude, 'abs')}\u00b0 ${latHemisphere(moment.latitude)}`;
+    case 'lon-card':
+      return `${formatCoord(moment.longitude, 'abs')}\u00b0 ${lonHemisphere(moment.longitude)}`;
+    case 'alt-m':
+      return t.alt ? t.alt.replace(/^alt /, '') : null;
     case 'coords-pair':
       return `${t.lat}, ${t.lon}`;
     case 'coords-alt':

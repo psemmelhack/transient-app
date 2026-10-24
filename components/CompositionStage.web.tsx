@@ -486,6 +486,50 @@ function QuietPiece({ block, align }: { block: QuietBlock; align: Align }) {
       </div>
     );
   }
+  if (block.kind === 'rows') {
+    return (
+      <div style={{ width: '100%', marginTop: block.marginTop }}>
+        {block.rows.map((row) => (
+          <div
+            key={row.label}
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'baseline',
+              gap: 28,
+              paddingTop: block.gap,
+              paddingBottom: block.gap,
+              borderBottom: block.hairline ? `1px solid ${block.color}` : undefined,
+            }}
+          >
+            <span
+              style={{
+                ...fontCss(block.labelFont),
+                fontSize: block.labelSize,
+                lineHeight: block.lineHeight,
+                letterSpacing: `${block.tracking}em`,
+                textTransform: 'uppercase',
+                flex: 'none',
+              }}
+            >
+              {row.label}
+            </span>
+            <span
+              style={{
+                ...fontCss(block.valueFont),
+                fontSize: block.valueSize,
+                lineHeight: block.lineHeight,
+                textAlign: 'right',
+                fontFeatureSettings: block.tabular ? '"tnum" 1' : block.valueFont.features,
+              }}
+            >
+              {row.value}
+            </span>
+          </div>
+        ))}
+      </div>
+    );
+  }
   return (
     <ShrinkText
       font={block.font}

@@ -11,7 +11,7 @@ npx expo start --web
 
 Open the URL Expo prints. The first screen is the composition, a note, and Save / Share. The style you used last time is restored; a first visit starts on preset 01. Scroll, or tap the sliders icon, and the type, color, layout, and optional data lines come up underneath the preview. The preview stays pinned and updates as you change them.
 
-`?fixture=1` freezes the sample place and time (Redondo Beach, 22 Oct 2026, 6:12 PM PDT) so the screen does not ask for location. `?proof=01` through `?proof=06` render one reference poster at export size.
+`?fixture=1` freezes the sample place and time (Redondo Beach, 22 Oct 2026, 6:12 PM PDT) so the screen does not ask for location. `?proof=01` through `?proof=09` render one reference poster at export size.
 
 Native projects are wired (`npm run ios`, `npm run android`) but image export and the map are built for the web.
 
@@ -35,4 +35,4 @@ Optional measurements are a small plugin list (`src/data/plugins.ts`): temperatu
 
 The map uses MapLibre and the OpenFreeMap Positron style. No API key.
 
-The interface is set in Inter. The poster keeps its own display and mono faces, and the font list shows each of those names in its own face. Inter and the poster faces are bundled under `public/fonts` and licensed under the SIL Open Font License. The license texts are in `licenses/`.
+The interface is set in Inter. The poster keeps its own display and mono faces, and the font list shows each of those names in its own face. Ledger uses the bundled Inter, with tabular figures, as its text face. Inter and the poster faces are bundled under `public/fonts` and licensed under the SIL Open Font License. The license texts are in `licenses/`.
