@@ -49,6 +49,22 @@ describe('saved style', () => {
     expect(loaded.measurements.sun).toBe(true);
     expect(loaded.measurements.temperature).toBe(false);
     expect(loaded.format).toBe('square');
+    expect(loaded.backgroundMode).toBe('manual');
+  });
+
+  it('restores whether Auto is on', () => {
+    vi.stubGlobal('localStorage', memoryStorage());
+    const manual = { ...defaultStyle(), presetId: null, backgroundMode: 'manual' as const, textColor: '#E3F03A', backgroundColor: '#112233' };
+    saveStyle(manual);
+    const loadedManual = loadStyle();
+    expect(loadedManual.backgroundMode).toBe('manual');
+    expect(loadedManual.backgroundColor).toBe('#112233');
+    expect(loadedManual.textColor).toBe('#E3F03A');
+    saveStyle({ ...manual, backgroundMode: 'auto', backgroundColor: '#ABCDEF' });
+    const loadedAuto = loadStyle();
+    expect(loadedAuto.backgroundMode).toBe('auto');
+    expect(loadedAuto.backgroundColor).toBe('#ABCDEF');
+    expect(loadedAuto.textColor).toBe('#E3F03A');
   });
 
   it('keeps a customized style that is no longer a preset', () => {
@@ -65,6 +81,7 @@ describe('saved style', () => {
     expect(loaded.recipeId).toBe('poster-generic');
     expect(loaded.textColor).toBe('#14203A');
     expect(loaded.backgroundColor).toBe('#F6F1E6');
+    expect(loaded.backgroundMode).toBe('auto');
     expect(loaded.displayFontId).toBe(defaultStyle().displayFontId);
     expect(loaded.format).toBe('square');
   });

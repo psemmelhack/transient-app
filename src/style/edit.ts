@@ -40,6 +40,9 @@ export function withMonoFont(style: Style, id: string): Style {
 export function withTextColor(style: Style, hex: string): Style {
   if (!isHex(hex)) return style;
   const textColor = normalizeHex(hex);
+  if (style.backgroundMode !== 'auto') {
+    return leavePreset(style, { textColor, footerColor: null });
+  }
   return leavePreset(style, {
     textColor,
     backgroundColor: complementaryBackground(textColor),
@@ -62,6 +65,12 @@ export function withAutoBackground(style: Style): Style {
     backgroundColor: complementaryBackground(style.textColor),
     footerColor: null,
   });
+}
+
+/** Leave the current background in place. Auto no longer follows the font color. */
+export function withManualBackground(style: Style): Style {
+  if (style.backgroundMode === 'manual') return style;
+  return leavePreset(style, { backgroundMode: 'manual' });
 }
 
 export function withMeasurement(style: Style, id: string, enabled: boolean): Style {

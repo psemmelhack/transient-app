@@ -11,6 +11,7 @@ import {
   withDisplayFont,
   withFormat,
   withLayout,
+  withManualBackground,
   withMeasurement,
   withMonoFont,
   withPreset,
@@ -156,7 +157,7 @@ export function Parameters({ style, onChange }: { style: Style; onChange: (next:
           <button
             type="button"
             aria-pressed={style.backgroundMode === 'auto'}
-            onClick={() => onChange(withAutoBackground(style))}
+            onClick={() => onChange(style.backgroundMode === 'auto' ? withManualBackground(style) : withAutoBackground(style))}
             style={{
               ...textChoice,
               fontFamily: ui,
@@ -164,7 +165,9 @@ export function Parameters({ style, onChange }: { style: Style; onChange: (next:
               fontSize: 12,
               letterSpacing: '0.14em',
               textTransform: 'uppercase',
-              boxShadow: style.backgroundMode === 'auto' ? `inset 0 0 0 1px ${ink}` : `inset 0 0 0 1px ${line}`,
+              color: style.backgroundMode === 'auto' ? paper : ink,
+              background: style.backgroundMode === 'auto' ? ink : 'transparent',
+              boxShadow: style.backgroundMode === 'auto' ? 'none' : `inset 0 0 0 1px ${line}`,
             }}
           >
             Auto
