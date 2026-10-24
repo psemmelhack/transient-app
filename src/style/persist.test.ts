@@ -48,6 +48,7 @@ describe('saved style', () => {
     expect(loaded.monoFontId).toBe('plex');
     expect(loaded.measurements.sun).toBe(true);
     expect(loaded.measurements.temperature).toBe(false);
+    expect(loaded.format).toBe('square');
   });
 
   it('keeps a customized style that is no longer a preset', () => {
@@ -65,5 +66,32 @@ describe('saved style', () => {
     expect(loaded.textColor).toBe('#14203A');
     expect(loaded.backgroundColor).toBe('#F6F1E6');
     expect(loaded.displayFontId).toBe(defaultStyle().displayFontId);
+    expect(loaded.format).toBe('square');
+  });
+
+  it('overrides a stored Story or Feed ratio and keeps every other field', () => {
+    const antonio = styleFromPreset(presetById('05'));
+    const loaded = sanitizeStyle({ ...antonio, format: 'story', measurements: { ...antonio.measurements, temperature: true } });
+    expect(loaded.format).toBe('square');
+    expect(loaded.presetId).toBe('05');
+    expect(loaded.recipeId).toBe('poster-antonio');
+    expect(loaded.layout).toBe('poster');
+    expect(loaded.align).toBe('right');
+    expect(loaded.textColor).toBe('#111111');
+    expect(loaded.backgroundColor).toBe('#E3F03A');
+    expect(loaded.footerColor).toBeNull();
+    expect(loaded.displayFontId).toBe('antonio');
+    expect(loaded.monoFontId).toBe('plex');
+    expect(loaded.temperatureUnit).toBe('F');
+    expect(loaded.measurements.temperature).toBe(true);
+    expect(loaded.measurements.sun).toBe(false);
+
+    const feed = sanitizeStyle({ ...styleFromPreset(presetById('01')), format: 'feed' });
+    expect(feed.format).toBe('square');
+    expect(feed.presetId).toBe('01');
+    expect(feed.recipeId).toBe('poster-anton');
+    expect(feed.textColor).toBe('#D2231C');
+    expect(feed.backgroundColor).toBe('#DCEFE4');
+    expect(feed.footerColor).toBe('#B01E18');
   });
 });

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { contrastRatio, formatContrast } from '../src/color/contrast';
 import { isHex, normalizeHex } from '../src/color/oklch';
-import { FORMAT_ORDER, FORMATS } from '../src/composition/formats';
+import { FORMAT_ORDER, FORMATS, formatChoiceEnabled } from '../src/composition/formats';
 import { CATEGORIES, fontCss, fontsIn, getFont, monoFonts, resolveFont } from '../src/composition/fonts';
 import { dataLinePlugins, isMeasurementEnabled } from '../src/data/plugins';
 import {
@@ -77,19 +77,21 @@ export function Parameters({ style, onChange }: { style: Style; onChange: (next:
         </div>
       </Section>
 
-      <Section label="Format">
-        <div style={{ display: 'flex', gap: 8 }}>
-          {FORMAT_ORDER.map((id) => (
-            <IconChoice
-              key={id}
-              icon={id}
-              label={`${FORMATS[id].label}, ${FORMATS[id].width} by ${FORMATS[id].height}`}
-              pressed={style.format === id}
-              onPress={() => onChange(withFormat(style, id))}
-            />
-          ))}
-        </div>
-      </Section>
+      {formatChoiceEnabled && (
+        <Section label="Format">
+          <div style={{ display: 'flex', gap: 8 }}>
+            {FORMAT_ORDER.map((id) => (
+              <IconChoice
+                key={id}
+                icon={id}
+                label={`${FORMATS[id].label}, ${FORMATS[id].width} by ${FORMATS[id].height}`}
+                pressed={style.format === id}
+                onPress={() => onChange(withFormat(style, id))}
+              />
+            ))}
+          </div>
+        </Section>
+      )}
 
       <Section label="Type">
         {CATEGORIES.filter((category) => category.id !== 'mono').map((category) => (

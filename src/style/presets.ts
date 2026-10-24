@@ -1,3 +1,4 @@
+import { resolvedFormat } from '../composition/formats';
 import { defaultMeasurements } from '../data/plugins';
 import type { Style } from './types';
 
@@ -159,7 +160,7 @@ export function styleFromPreset(preset: Preset, previous?: Style): Style {
     recipeId: preset.recipeId,
     layout: preset.layout,
     align: preset.align,
-    format: preset.format,
+    format: resolvedFormat(preset.format),
     textColor: preset.textColor,
     backgroundColor: preset.backgroundColor,
     backgroundMode: 'manual',

@@ -41,3 +41,13 @@ export const FORMATS: Record<FormatId, FormatSpec> = {
 };
 
 export const FORMAT_ORDER: FormatId[] = ['story', 'feed', 'square'];
+
+/**
+ * Story and Feed stay implemented. Set this true to show the Format control
+ * and honor a saved or preset ratio. While false, every composition is Square.
+ */
+export const formatChoiceEnabled = false;
+
+export function resolvedFormat(format: FormatId): FormatId {
+  return formatChoiceEnabled ? format : 'square';
+}

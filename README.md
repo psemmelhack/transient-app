@@ -27,7 +27,7 @@ The published site is HTTPS, so the browser can share your location. The page in
 
 ## Architecture
 
-The on-screen preview and the saved PNG are the same DOM stage, drawn at the export pixel size (Story 1080×1920, Feed 1080×1350, Square 1080×1080) and scaled with CSS for display. Poster lines are fit to the width of that stage. Save stamps GPS, time, temperature, and sun position into PNG text metadata.
+The on-screen preview and the saved PNG are the same DOM stage, drawn at the export pixel size and scaled with CSS for display. The app currently composes in Square (1080×1080). Story (1080×1920) and Feed (1080×1350) remain in the code; set `formatChoiceEnabled` in `src/composition/formats.ts` to show the Format control and honor those ratios again. Poster lines are fit to the width of that stage. Save stamps GPS, time, temperature, and sun position into PNG text metadata.
 
 Last-used style lives in `localStorage`. Saved transients, including the PNG, live in IndexedDB on this device. There is no account and no backend.
 
