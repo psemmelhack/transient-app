@@ -19,6 +19,48 @@ export interface Preset {
 
 export const PRESETS: Preset[] = [
   {
+    id: '07',
+    name: 'Ledger',
+    recipeId: 'quiet-ledger',
+    layout: 'quiet',
+    align: 'left',
+    format: 'feed',
+    textColor: '#1A1F2B',
+    backgroundColor: '#F5F3EE',
+    footerColor: null,
+    displayFontId: 'inter',
+    monoFontId: 'plex',
+    sampleMessage: 'For the record.',
+  },
+  {
+    id: '08',
+    name: 'Boardroom',
+    recipeId: 'quiet-boardroom',
+    layout: 'quiet',
+    align: 'left',
+    format: 'feed',
+    textColor: '#ECE8DF',
+    backgroundColor: '#0E1A2B',
+    footerColor: null,
+    displayFontId: 'instrument',
+    monoFontId: 'plex',
+    sampleMessage: 'Approved as presented.',
+  },
+  {
+    id: '09',
+    name: 'Title block',
+    recipeId: 'quiet-title-block',
+    layout: 'quiet',
+    align: 'left',
+    format: 'feed',
+    textColor: '#23262B',
+    backgroundColor: '#E6E8EB',
+    footerColor: null,
+    displayFontId: 'plex',
+    monoFontId: 'plex',
+    sampleMessage: 'Issued for record.',
+  },
+  {
     id: '01',
     name: 'Anton',
     recipeId: 'poster-anton',
@@ -102,52 +144,13 @@ export const PRESETS: Preset[] = [
     monoFontId: 'jetbrains',
     sampleMessage: 'The light on the water, right now.',
   },
-  {
-    id: '07',
-    name: 'Ledger',
-    recipeId: 'quiet-ledger',
-    layout: 'quiet',
-    align: 'left',
-    format: 'feed',
-    textColor: '#1A1F2B',
-    backgroundColor: '#F5F3EE',
-    footerColor: null,
-    displayFontId: 'inter',
-    monoFontId: 'plex',
-    sampleMessage: 'For the record.',
-  },
-  {
-    id: '08',
-    name: 'Boardroom',
-    recipeId: 'quiet-boardroom',
-    layout: 'quiet',
-    align: 'left',
-    format: 'feed',
-    textColor: '#ECE8DF',
-    backgroundColor: '#0E1A2B',
-    footerColor: null,
-    displayFontId: 'instrument',
-    monoFontId: 'plex',
-    sampleMessage: 'Approved as presented.',
-  },
-  {
-    id: '09',
-    name: 'Title block',
-    recipeId: 'quiet-title-block',
-    layout: 'quiet',
-    align: 'left',
-    format: 'feed',
-    textColor: '#23262B',
-    backgroundColor: '#E6E8EB',
-    footerColor: null,
-    displayFontId: 'plex',
-    monoFontId: 'plex',
-    sampleMessage: 'Issued for record.',
-  },
 ];
 
+/** First visit and any missing saved field stay on Anton. List order does not change that. */
+const OPENING_PRESET_ID = '01';
+
 export function presetById(id: string): Preset {
-  return PRESETS.find((preset) => preset.id === id) ?? PRESETS[0];
+  return PRESETS.find((preset) => preset.id === id) ?? PRESETS.find((preset) => preset.id === OPENING_PRESET_ID)!;
 }
 
 export function styleFromPreset(preset: Preset, previous?: Style): Style {
@@ -169,5 +172,5 @@ export function styleFromPreset(preset: Preset, previous?: Style): Style {
 }
 
 export function defaultStyle(): Style {
-  return styleFromPreset(PRESETS[0]);
+  return styleFromPreset(presetById(OPENING_PRESET_ID));
 }

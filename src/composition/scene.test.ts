@@ -22,7 +22,7 @@ describe('preset compositions', () => {
       '6:12 PM PDT',
       'REDONDO BEACH',
     ]);
-    const scene = buildScene(styleFromPreset(PRESETS[0]), moment, 'We were here.');
+    const scene = buildScene(styleFromPreset(presetById('01')), moment, 'We were here.');
     expect(scene.width).toBe(1080);
     expect(scene.height).toBe(1350);
     expect(scene.background).toBe('#DCEFE4');
@@ -38,8 +38,9 @@ describe('preset compositions', () => {
   });
 
   it('centers Big Shoulders and joins the small print', () => {
-    const scene = buildScene(styleFromPreset(PRESETS[1]), moment, PRESETS[1].sampleMessage);
-    expect(fitLines('02', PRESETS[1].sampleMessage)).toEqual([
+    const shoulders = presetById('02');
+    const scene = buildScene(styleFromPreset(shoulders), moment, shoulders.sampleMessage);
+    expect(fitLines('02', shoulders.sampleMessage)).toEqual([
       '33.834452',
       '-118.383318',
       'OCT 22 2026',
@@ -53,7 +54,7 @@ describe('preset compositions', () => {
   });
 
   it('sets the quiet Bodoni coordinates with hemispheres', () => {
-    const scene = buildScene(styleFromPreset(PRESETS[2]), moment, PRESETS[2].sampleMessage);
+    const scene = buildScene(styleFromPreset(presetById('03')), moment, presetById('03').sampleMessage);
     const quiet = scene.nodes.find((node) => node.kind === 'quiet') as QuietNode;
     const coords = quiet.blocks.find((block) => block.kind === 'coords');
     expect(coords && coords.kind === 'coords' && coords.lines.map((line) => `${line.value}${line.suffix ?? ''}`)).toEqual([
@@ -66,7 +67,7 @@ describe('preset compositions', () => {
   });
 
   it('speaks the evening on the Instrument poster', () => {
-    const scene = buildScene(styleFromPreset(PRESETS[3]), moment, 'We were here.');
+    const scene = buildScene(styleFromPreset(presetById('04')), moment, 'We were here.');
     const quiet = scene.nodes.find((node) => node.kind === 'quiet') as QuietNode;
     const time = quiet.blocks.find((block) => block.kind === 'rich-time');
     expect(time && time.kind === 'rich-time' && time.weekday).toBe('Thursday,');
@@ -75,7 +76,8 @@ describe('preset compositions', () => {
   });
 
   it('uses the story frame for Antonio', () => {
-    const scene = buildScene(styleFromPreset(PRESETS[4]), moment, PRESETS[4].sampleMessage);
+    const antonio = presetById('05');
+    const scene = buildScene(styleFromPreset(antonio), moment, antonio.sampleMessage);
     expect(scene.width).toBe(1080);
     expect(scene.height).toBe(1920);
     expect(scene.background).toBe('#E3F03A');
@@ -85,20 +87,21 @@ describe('preset compositions', () => {
   });
 
   it('uses an en dash on the Fraunces square', () => {
-    expect(fitLines('06', PRESETS[5].sampleMessage)).toEqual(['33.834452', '\u2013118.383318']);
-    const scene = buildScene(styleFromPreset(PRESETS[5]), moment, PRESETS[5].sampleMessage);
+    const fraunces = presetById('06');
+    expect(fitLines('06', fraunces.sampleMessage)).toEqual(['33.834452', '\u2013118.383318']);
+    const scene = buildScene(styleFromPreset(fraunces), moment, fraunces.sampleMessage);
     expect(scene.width).toBe(1080);
     expect(scene.height).toBe(1080);
   });
 
   it('hides an empty note', () => {
-    const scene = buildScene(styleFromPreset(PRESETS[0]), moment, '   ');
+    const scene = buildScene(styleFromPreset(presetById('01')), moment, '   ');
     const footer = scene.nodes.find((node) => node.kind === 'footer') as FooterNode;
     expect(footer.message).toBeUndefined();
   });
 
   it('appends optional measurements under the small type', () => {
-    const style = styleFromPreset(PRESETS[0]);
+    const style = styleFromPreset(presetById('01'));
     style.measurements = { ...style.measurements, temperature: true, sun: true };
     const warm = { ...moment, temperatureC: 20 };
     const scene = buildScene(style, warm, 'Hi');
@@ -107,19 +110,19 @@ describe('preset compositions', () => {
     expect(footer.extraLines.some((line) => line.startsWith('sun '))).toBe(true);
   });
 
-  it('keeps the original six presets ahead of the business set', () => {
-    expect(PRESETS.slice(0, 6).map((preset) => preset.id)).toEqual(['01', '02', '03', '04', '05', '06']);
+  it('lists the business presets first, then the original six', () => {
     expect(PRESETS.map((preset) => preset.name)).toEqual([
+      'Ledger',
+      'Boardroom',
+      'Title block',
       'Anton',
       'Big Shoulders',
       'Bodoni',
       'Instrument',
       'Antonio',
       'Fraunces',
-      'Ledger',
-      'Boardroom',
-      'Title block',
     ]);
+    expect(PRESETS.map((preset) => preset.id)).toEqual(['07', '08', '09', '01', '02', '03', '04', '05', '06']);
   });
 
   it('sets Ledger in Inter, left, with tabular figures and wide margins', () => {
