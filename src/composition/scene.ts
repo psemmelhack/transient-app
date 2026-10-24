@@ -1,8 +1,9 @@
-import { measurementLines } from '../data/plugins';
+import { measurementLines, isTelemetryEnabled } from '../data/plugins';
 import { deviceTimeZone, type Moment } from '../data/moment';
+import { omitSupersededAccuracy, telemetryLines, type TelemetryLine } from '../data/telemetry';
 import type { Style } from '../style/types';
 import { FORMATS } from './formats';
-import { resolveFont, type CssFont, type FontRole } from './fonts';
+import { getFont, resolveFont, type CssFont, type FontRole } from './fonts';
 import { getRecipe, type PosterRecipe, type QuietBlockSpec, type QuietRecipe } from './recipes';
 import { clockLabel, coordLines, linesFor, MARK, momentText, renderToken, type CoordLineModel } from './text';
 
@@ -34,6 +35,8 @@ export interface FitStackNode {
   font: CssFont;
   lines: string[];
   align: Align;
+  /** Line count of the footer extras, so the hero refits when telemetry appears. */
+  footerCue: string;
 }
 
 export interface FooterNode {
@@ -61,7 +64,16 @@ export interface FooterNode {
   splitLeft?: string;
   splitRight?: string;
   extraLines: string[];
+  telemetry?: TelemetryBlock;
   mark?: { text: string; font: CssFont; fontSize: number; opacity: number; tracking?: number; marginTop: number };
+}
+
+export interface TelemetryBlock {
+  lines: TelemetryLine[];
+  font: CssFont;
+  fontSize: number;
+  lineHeight: number;
+  opacity: number;
 }
 
 export interface QuietNode {
@@ -133,6 +145,15 @@ export type QuietBlock =
       tabular: boolean;
       color: string;
       rows: { label: string; value: string }[];
+    }
+  | {
+      kind: 'telemetry';
+      lines: TelemetryLine[];
+      font: CssFont;
+      fontSize: number;
+      lineHeight: number;
+      marginTop: number;
+      opacity: number;
     };
 
 export interface MarkNode {
@@ -189,7 +210,27 @@ function fontOf(style: Style, role: FontRole): CssFont {
 }
 
 function extras(style: Style, moment: Moment): string[] {
-  return measurementLines(style.measurements, style.temperatureUnit, moment).map((line) => line.text);
+  return measured(style, moment).map((line) => line.text);
+}
+
+function measured(style: Style, moment: Moment) {
+  const lines = measurementLines(style.measurements, style.temperatureUnit, moment);
+  return omitSupersededAccuracy(lines, telemetryFor(style, moment));
+}
+
+function telemetryFor(style: Style, moment: Moment): TelemetryLine[] {
+  if (!isTelemetryEnabled(style.measurements)) return [];
+  return telemetryLines(moment);
+}
+
+function plexFont(): CssFont {
+  const font = getFont('plex');
+  return { family: font.family, weight: font.weight, style: 'normal', features: '"tnum" 1' };
+}
+
+function telemetryBlock(lines: TelemetryLine[], fontSize: number, lineHeight: number, opacity: number): TelemetryBlock | undefined {
+  if (!lines.length) return undefined;
+  return { lines, font: plexFont(), fontSize, lineHeight, opacity };
 }
 
 export function buildScene(style: Style, moment: Moment | null, message: string, now = new Date()): Scene {
@@ -289,6 +330,7 @@ function posterNodes(recipe: PosterRecipe, style: Style, moment: Moment, message
       font: fontOf(style, 'display'),
       lines,
       align: style.align,
+      footerCue: '',
     });
   }
 
@@ -296,6 +338,11 @@ function posterNodes(recipe: PosterRecipe, style: Style, moment: Moment, message
   const arrangement = footerArrangement(recipe, style.align);
   const metaLines = linesFor(recipe.footer.metaTokens, moment, message, recipe.footer.metaJoin);
   const extra = extras(style, moment);
+  const telemetry = telemetryBlock(telemetryFor(style, moment), Math.min(16, recipe.footer.metaSize), 1.45, recipe.footer.metaOpacity);
+  const hero = nodes.find((node) => node.kind === 'fit-stack');
+  if (hero && hero.kind === 'fit-stack') {
+    hero.footerCue = `${extra.length}:${telemetry?.lines.map((line) => line.id).join(',') ?? ''}`;
+  }
   const messageText = renderToken('message', moment, message);
   const splitLeft = recipe.footer.splitLeft
     ? renderToken(recipe.footer.splitLeft, moment, message) ?? undefined
@@ -331,6 +378,7 @@ function posterNodes(recipe: PosterRecipe, style: Style, moment: Moment, message
     splitLeft,
     splitRight,
     extraLines: extra,
+    telemetry,
     mark: recipe.footer.markInFlow
       ? {
           text: MARK,
@@ -372,25 +420,42 @@ function quietNodes(recipe: QuietRecipe, style: Style, moment: Moment, message: 
     const block = quietBlock(spec, style, moment, message);
     if (block) blocks.push(block);
   }
-  const measured = measurementLines(style.measurements, style.temperatureUnit, moment);
-  if (measured.length) {
+  const readings = measured(style, moment);
+  const telemetry = telemetryFor(style, moment);
+  if (readings.length || telemetry.length) {
     const rowBlock = recipe.measurementRows ? blocks.find((block) => block.kind === 'rows') : undefined;
     if (rowBlock && rowBlock.kind === 'rows') {
-      for (const line of measured) {
+      for (const line of readings) {
         rowBlock.rows.push({ label: measurementLabel(line.id), value: measurementValue(line.id, line.text) });
+      }
+      for (const line of telemetry) {
+        rowBlock.rows.push({ label: line.label, value: line.values.join('  ') });
       }
     } else {
       const meta = recipe.measurementMeta;
-      blocks.push({
-        kind: 'meta',
-        lines: measured.map((line) => line.text),
-        font: fontOf(style, meta?.font ?? 'mono'),
-        fontSize: meta?.size ?? 16,
-        lineHeight: meta?.lineHeight ?? 1.7,
-        marginTop: meta?.marginTop ?? 22,
-        opacity: meta?.opacity ?? 0.72,
-        tracking: meta?.tracking,
-      });
+      if (readings.length) {
+        blocks.push({
+          kind: 'meta',
+          lines: readings.map((line) => line.text),
+          font: fontOf(style, meta?.font ?? 'mono'),
+          fontSize: meta?.size ?? 16,
+          lineHeight: meta?.lineHeight ?? 1.7,
+          marginTop: meta?.marginTop ?? 22,
+          opacity: meta?.opacity ?? 0.72,
+          tracking: meta?.tracking,
+        });
+      }
+      if (telemetry.length) {
+        blocks.push({
+          kind: 'telemetry',
+          lines: telemetry,
+          font: plexFont(),
+          fontSize: meta?.size ?? 15,
+          lineHeight: 1.55,
+          marginTop: readings.length ? 10 : (meta?.marginTop ?? 18),
+          opacity: meta?.opacity ?? 0.86,
+        });
+      }
     }
   }
   const nodes: SceneNode[] = [

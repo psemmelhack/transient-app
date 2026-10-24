@@ -121,7 +121,7 @@ interface RowFit {
 }
 
 function fitSignature(node: FitStackNode): string {
-  return `${node.lines.join('\n')}|${node.font.family}|${node.font.weight}|${node.font.style}|${node.font.variation ?? ''}|${node.gap}|${node.left}|${node.right}|${node.top}|${node.color}|${node.align}`;
+  return `${node.lines.join('\n')}|${node.font.family}|${node.font.weight}|${node.font.style}|${node.font.variation ?? ''}|${node.gap}|${node.left}|${node.right}|${node.top}|${node.color}|${node.align}|${node.footerCue}`;
 }
 
 const FitStack = memo(
@@ -322,6 +322,11 @@ function Footer({ node }: { node: FooterNode }) {
           ))}
         </div>
       )}
+      {node.telemetry && (
+        <div style={{ display: 'flex', justifyContent: alignItems === 'center' ? 'center' : alignItems === 'flex-end' ? 'flex-end' : 'flex-start', marginTop: 12, width: '100%' }}>
+          <TelemetryTable block={node.telemetry} color={node.color} />
+        </div>
+      )}
       {node.mark && (
         <div
           style={{
@@ -486,6 +491,14 @@ function QuietPiece({ block, align }: { block: QuietBlock; align: Align }) {
       </div>
     );
   }
+  if (block.kind === 'telemetry') {
+    const justify = align === 'center' ? 'center' : align === 'right' ? 'flex-end' : 'flex-start';
+    return (
+      <div style={{ display: 'flex', justifyContent: justify, width: '100%', marginTop: block.marginTop }}>
+        <TelemetryTable block={block} />
+      </div>
+    );
+  }
   if (block.kind === 'rows') {
     return (
       <div style={{ width: '100%', marginTop: block.marginTop }}>
@@ -520,6 +533,7 @@ function QuietPiece({ block, align }: { block: QuietBlock; align: Align }) {
                 fontSize: block.valueSize,
                 lineHeight: block.lineHeight,
                 textAlign: 'right',
+                whiteSpace: 'pre',
                 fontFeatureSettings: block.tabular ? '"tnum" 1' : block.valueFont.features,
               }}
             >
@@ -542,6 +556,49 @@ function QuietPiece({ block, align }: { block: QuietBlock; align: Align }) {
     >
       {block.text}
     </ShrinkText>
+  );
+}
+
+function TelemetryTable({ block, color }: { block: { lines: { id: string; label: string; values: string[] }[]; font: CssFont; fontSize: number; lineHeight: number; opacity: number }; color?: string }) {
+  return (
+    <div
+      data-role="telemetry"
+      style={{
+        ...fontCss(block.font),
+        fontSize: block.fontSize,
+        lineHeight: block.lineHeight,
+        opacity: block.opacity,
+        color,
+        fontFeatureSettings: '"tnum" 1',
+        fontVariantNumeric: 'tabular-nums',
+        display: 'grid',
+        gridTemplateColumns: '5.8em repeat(3, 4.5em)',
+        columnGap: '0.55em',
+        width: 'max-content',
+        maxWidth: '100%',
+      }}
+    >
+      {block.lines.map((line) => (
+        <TelemetryRow key={line.id} line={line} />
+      ))}
+    </div>
+  );
+}
+
+function TelemetryRow({ line }: { line: { label: string; values: string[] } }) {
+  return (
+    <>
+      <span style={{ letterSpacing: '0.12em', whiteSpace: 'nowrap' }}>{line.label}</span>
+      {line.values.length === 1 ? (
+        <span style={{ gridColumn: '2 / span 3', textAlign: 'right', whiteSpace: 'pre' }}>{line.values[0]}</span>
+      ) : (
+        line.values.map((value, index) => (
+          <span key={index} style={{ textAlign: 'right', whiteSpace: 'pre' }}>
+            {value}
+          </span>
+        ))
+      )}
+    </>
   );
 }
 

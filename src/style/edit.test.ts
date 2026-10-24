@@ -66,6 +66,8 @@ describe('style edits', () => {
     const next = withMeasurement(defaultStyle(), 'sun', true);
     expect(next.measurements.sun).toBe(true);
     expect(next.measurements.temperature).toBe(false);
+    expect(withMeasurement(next, 'telemetry', true).measurements.telemetry).toBe(true);
+    expect(withMeasurement(next, 'telemetry', true).presetId).toBe(next.presetId);
     const back = withAutoBackground(next);
     expect(back.measurements.sun).toBe(true);
     expect(back.backgroundMode).toBe('auto');

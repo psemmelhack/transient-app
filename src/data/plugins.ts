@@ -63,6 +63,16 @@ export const dataLinePlugins: DataLinePlugin[] = [
       return `sun ${Math.round(sun.azimuth)}\u00b0 az \u00b7 ${signedDegree(sun.altitude)}\u00b0 el`;
     },
   },
+  {
+    id: 'telemetry',
+    title: 'Telemetry',
+    toggle: true,
+    defaultEnabled: false,
+    /** Each reading is its own line, composed in telemetry.ts. */
+    produce() {
+      return null;
+    },
+  },
 ];
 
 export function isMeasurementEnabled(
@@ -90,6 +100,11 @@ export function measurementLines(
     if (text) lines.push({ id: plugin.id, text });
   }
   return lines;
+}
+
+export function isTelemetryEnabled(measurements: Record<string, boolean>): boolean {
+  const plugin = dataLinePlugins.find((item) => item.id === 'telemetry');
+  return plugin ? isMeasurementEnabled(measurements, plugin) : false;
 }
 
 export function defaultMeasurements(): Record<string, boolean> {

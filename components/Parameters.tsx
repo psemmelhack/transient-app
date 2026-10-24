@@ -4,6 +4,8 @@ import { isHex, normalizeHex } from '../src/color/oklch';
 import { FORMAT_ORDER, FORMATS, formatChoiceEnabled } from '../src/composition/formats';
 import { CATEGORIES, fontCss, fontsIn, getFont, monoFonts, resolveFont } from '../src/composition/fonts';
 import { dataLinePlugins, isMeasurementEnabled } from '../src/data/plugins';
+import { requestMotionAccess } from '../src/data/telemetry';
+import { notifyTelemetryPermission } from '../src/location/useTelemetry';
 import {
   withAlign,
   withAutoBackground,
@@ -25,7 +27,33 @@ import { ink, line, muted, paper, ui } from './theme';
 
 const SWATCHES = ['#111111', '#FFFFFF', '#D2231C', '#4B1C40', '#1E3A2D', '#CBA65E', '#14203A', '#E3F03A', '#F2E8D5', '#F7E4E1'];
 
+const MOTION_NOTE = 'Motion access is off. Location extras still show.';
+
 export function Parameters({ style, onChange }: { style: Style; onChange: (next: Style) => void }) {
+  const [motionNote, setMotionNote] = useState<string | null>(null);
+
+  function onMeasurement(id: string, on: boolean) {
+    const next = !on;
+    if (id !== 'telemetry') {
+      onChange(withMeasurement(style, id, next));
+      return;
+    }
+    if (!next) {
+      setMotionNote(null);
+      onChange(withMeasurement(style, id, false));
+      return;
+    }
+    const pending = requestMotionAccess();
+    onChange(withMeasurement(style, id, true));
+    void pending.then((access) => {
+      setMotionNote(access === 'denied' ? MOTION_NOTE : null);
+      notifyTelemetryPermission();
+    }).catch(() => {
+      setMotionNote(MOTION_NOTE);
+      notifyTelemetryPermission();
+    });
+  }
+
   return (
     <div style={parametersStyle}>
       <Section label="Presets">
@@ -187,12 +215,18 @@ export function Parameters({ style, onChange }: { style: Style; onChange: (next:
                   type="button"
                   role="switch"
                   aria-checked={on}
-                  onClick={() => onChange(withMeasurement(style, plugin.id, !on))}
+                  aria-describedby={plugin.id === 'telemetry' && motionNote ? 'telemetry-note' : undefined}
+                  onClick={() => onMeasurement(plugin.id, on)}
                   style={switchRow}
                 >
                   <span>{plugin.title}</span>
                   <Toggle on={on} />
                 </button>
+                {plugin.id === 'telemetry' && motionNote && (
+                  <p id="telemetry-note" style={{ fontFamily: ui, fontWeight: 400, fontSize: 12, lineHeight: 1.45, color: muted, margin: '8px 0 4px' }}>
+                    {motionNote}
+                  </p>
+                )}
                 {plugin.id === 'temperature' && on && (
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, padding: '0 0 12px', minWidth: 0, maxWidth: '100%' }}>
                     {(['F', 'C', 'both'] as TempUnit[]).map((unit) => (

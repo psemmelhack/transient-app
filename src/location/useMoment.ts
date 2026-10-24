@@ -19,6 +19,9 @@ interface ReadyLoc {
   longitude: number;
   altitude: number | null;
   accuracy: number | null;
+  altitudeAccuracy: number | null;
+  speed: number | null;
+  course: number | null;
   place: PlaceInfo | null;
 }
 
@@ -27,6 +30,10 @@ interface AcquiringLoc {
 }
 
 type LocState = ReadyLoc | AcquiringLoc;
+
+function finiteOrNull(value: number | null | undefined): number | null {
+  return typeof value === 'number' && Number.isFinite(value) ? value : null;
+}
 
 function exampleLoc(): ReadyLoc {
   const sample = exampleMoment();
@@ -37,6 +44,9 @@ function exampleLoc(): ReadyLoc {
     longitude: sample.longitude,
     altitude: sample.altitude,
     accuracy: null,
+    altitudeAccuracy: null,
+    speed: null,
+    course: null,
     place: sample.place,
   };
 }
@@ -75,8 +85,11 @@ export function useMoment(fixture: boolean): {
         source: 'device',
         latitude: pos.coords.latitude,
         longitude: pos.coords.longitude,
-        altitude: typeof pos.coords.altitude === 'number' ? pos.coords.altitude : null,
-        accuracy: typeof pos.coords.accuracy === 'number' ? pos.coords.accuracy : null,
+        altitude: finiteOrNull(pos.coords.altitude),
+        accuracy: finiteOrNull(pos.coords.accuracy),
+        altitudeAccuracy: finiteOrNull(pos.coords.altitudeAccuracy),
+        speed: finiteOrNull(pos.coords.speed),
+        course: finiteOrNull(pos.coords.heading),
         place: null,
       });
     };
@@ -147,10 +160,14 @@ export function useMoment(fixture: boolean): {
           longitude: loc.longitude,
           altitude: loc.altitude,
           accuracy: loc.accuracy,
+          altitudeAccuracy: loc.altitudeAccuracy,
+          speed: loc.speed,
+          course: loc.course,
           place: loc.place,
           timezone: loc.source === 'example' ? 'America/Los_Angeles' : deviceTimeZone(),
           source: loc.source,
           temperatureC,
+          sensors: null,
         }
       : null;
 

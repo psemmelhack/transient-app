@@ -1,10 +1,19 @@
 import { describe, expect, it } from 'vitest';
 import { exampleMoment, EXAMPLE_INSTANT } from '../data/moment';
+import type { SensorSample } from '../data/telemetry';
 import { contrastRatio } from '../color/contrast';
 import { PRESETS, presetById, styleFromPreset } from '../style/presets';
 import { buildScene, type FitStackNode, type FooterNode, type QuietNode } from './scene';
 
 const moment = exampleMoment(EXAMPLE_INSTANT);
+
+const sensors: SensorSample = {
+  acceleration: { x: 0.12, y: 9.81, z: -0.04 },
+  rotationRate: { alpha: 0.4, beta: -1.2, gamma: 0 },
+  orientation: { alpha: 86, beta: 12, gamma: -3 },
+  heading: 274,
+  battery: null,
+};
 
 function fitLines(styleId: string, message: string): string[] {
   const preset = PRESETS.find((item) => item.id === styleId)!;
@@ -218,5 +227,65 @@ describe('preset compositions', () => {
         expect(rows && rows.kind === 'rows' && rows.rows.some((row) => row.label === 'Sun' && !row.value.startsWith('sun '))).toBe(true);
       }
     }
+  });
+
+  it('sets telemetry in IBM Plex Mono and joins the title block', () => {
+    const sensed = {
+      ...moment,
+      accuracy: 12,
+      altitudeAccuracy: 4,
+      speed: 1.4,
+      course: 182,
+      sensors,
+    };
+    for (const id of PRESETS.map((preset) => preset.id)) {
+      const style = styleFromPreset(presetById(id));
+      style.measurements = { ...style.measurements, telemetry: true };
+      const scene = buildScene(style, sensed, 'Noted.');
+      expect(scene.width).toBe(1080);
+      expect(scene.height).toBe(1080);
+      const text = JSON.stringify(scene.nodes);
+      expect(text).toContain('274° W');
+      expect(text).toContain('IBM Plex Mono');
+    }
+
+    const poster = styleFromPreset(presetById('02'));
+    poster.measurements = { ...poster.measurements, telemetry: true };
+    const posterScene = buildScene(poster, sensed, 'Noted.');
+    const footer = posterScene.nodes.find((node) => node.kind === 'footer') as FooterNode;
+    expect(footer.telemetry?.font.family).toBe('IBM Plex Mono');
+    expect(footer.telemetry?.lines.map((line) => line.label)).toEqual(['ACC', 'GYRO', 'ORIENT', 'HDG', '±ACC', '±ALT', 'SPD', 'CRS']);
+    expect(footer.extraLines.some((line) => line.startsWith('±'))).toBe(false);
+    const hero = posterScene.nodes.find((node) => node.kind === 'fit-stack') as FitStackNode;
+    expect(hero.footerCue).toContain('hdg');
+
+    const ledger = styleFromPreset(presetById('07'));
+    ledger.measurements = { ...ledger.measurements, telemetry: true };
+    const ledgerScene = buildScene(ledger, sensed, 'Noted.');
+    const ledgerQuiet = ledgerScene.nodes.find((node) => node.kind === 'quiet') as QuietNode;
+    const table = ledgerQuiet.blocks.find((block) => block.kind === 'telemetry');
+    expect(table && table.kind === 'telemetry' && table.font.family).toBe('IBM Plex Mono');
+    expect(table && table.kind === 'telemetry' && table.fontSize).toBeLessThanOrEqual(16);
+
+    const title = styleFromPreset(presetById('09'));
+    title.measurements = { ...title.measurements, telemetry: true };
+    const titleScene = buildScene(title, sensed, 'Noted.');
+    const titleQuiet = titleScene.nodes.find((node) => node.kind === 'quiet') as QuietNode;
+    const rows = titleQuiet.blocks.find((block) => block.kind === 'rows');
+    expect(rows && rows.kind === 'rows' && rows.rows.some((row) => row.label === 'HDG' && row.value === '274° W')).toBe(true);
+    expect(rows && rows.kind === 'rows' && rows.rows.some((row) => row.label === 'ACC' && row.value === '0.12  9.81  −0.04')).toBe(true);
+    expect(rows && rows.kind === 'rows' && rows.rows.some((row) => row.label === 'Accuracy')).toBe(false);
+    if (rows && rows.kind === 'rows') {
+      const estimated = rows.rows.length * (rows.gap * 2 + rows.valueSize * rows.lineHeight);
+      expect(estimated).toBeLessThan(1080 - 88);
+    }
+  });
+
+  it('hides telemetry until it is turned on', () => {
+    const sensed = { ...moment, accuracy: 8, sensors };
+    const scene = buildScene(styleFromPreset(presetById('01')), sensed, 'Hi');
+    const footer = scene.nodes.find((node) => node.kind === 'footer') as FooterNode;
+    expect(footer.telemetry).toBeUndefined();
+    expect(footer.extraLines).toEqual(['±8 m']);
   });
 });
