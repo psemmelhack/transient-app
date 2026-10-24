@@ -1,5 +1,6 @@
 import { openDB, type IDBPDatabase } from 'idb';
 import type { FormatId } from '../composition/formats';
+import type { TelemetrySnapshot } from '../data/telemetry';
 import type { Style } from '../style/types';
 
 export interface ShareEntry {
@@ -26,6 +27,8 @@ export interface TransientRecord {
   sunAzimuth: number | null;
   sunAltitude: number | null;
   lines: { id: string; text: string }[];
+  /** Sensor and GPS extras captured with the image. Absent on older records. */
+  telemetry?: TelemetrySnapshot | null;
   style: Style;
   width: number;
   height: number;

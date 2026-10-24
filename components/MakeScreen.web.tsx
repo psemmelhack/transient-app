@@ -7,6 +7,8 @@ import { saveImage } from '../src/share/share';
 import { insertPngText, metadataFor } from '../src/export/pngMeta';
 import { previewBox, PIN_HEADER } from '../src/layout/previewSize';
 import { useMoment } from '../src/location/useMoment';
+import { applyTelemetry, useTelemetry, type TelemetryLive } from '../src/location/useTelemetry';
+import { isTelemetryEnabled } from '../src/data/plugins';
 import type { Moment } from '../src/data/moment';
 import { sunPosition } from '../src/data/solar';
 import type { Scene } from '../src/composition/scene';
@@ -30,6 +32,8 @@ interface PendingShare {
 export function MakeScreen({ onMap, fixture = false }: { onMap: () => void; fixture?: boolean }) {
   const { style, update, randomize, undo, canUndo } = useStyle();
   const { moment, now, retry } = useMoment(fixture);
+  const telemetryOn = isTelemetryEnabled(style.measurements);
+  const telemetry = useTelemetry(telemetryOn);
   const [note, setNote] = useState('');
   const [lock, setLock] = useState<Moment | null>(null);
   const [atControls, setAtControls] = useState(false);
@@ -46,7 +50,11 @@ export function MakeScreen({ onMap, fixture = false }: { onMap: () => void; fixt
   const paramsRef = useRef<HTMLDivElement>(null);
   const stageRef = useRef<HTMLElement | null>(null);
 
-  const shown = lock ?? moment;
+  const shown = useMemo(() => {
+    const base = lock ?? moment;
+    if (!base || lock) return base;
+    return applyTelemetry(base, telemetryOn ? telemetry.sensors : null, telemetryOn ? telemetry.location : null);
+  }, [lock, moment, telemetry.sensors, telemetry.location, telemetryOn]);
   const scene = useMemo(() => buildScene(style, shown, note, shown?.at ?? now), [style, shown, note, now]);
   const box = previewBox({
     sceneWidth: scene.width,
@@ -141,7 +149,7 @@ export function MakeScreen({ onMap, fixture = false }: { onMap: () => void; fixt
     if (!moment || working) return;
     setWorking(true);
     try {
-      const frozen = freeze(moment);
+      const frozen = freeze(moment, telemetry.capture());
       const rendered = await renderPng(frozen);
       const delivered = await saveImage(rendered.png, fileNameFor(frozen.at, frozen.latitude, frozen.longitude), downloadBlob);
       if (delivered === 'cancelled') return;
@@ -159,7 +167,7 @@ export function MakeScreen({ onMap, fixture = false }: { onMap: () => void; fixt
     if (!moment || working) return;
     setWorking(true);
     try {
-      const frozen = freeze(moment);
+      const frozen = freeze(moment, telemetry.capture());
       const rendered = await renderPng(frozen);
       setPending({ png: rendered.png, moment: frozen, scene: rendered.scene });
     } catch {
@@ -303,8 +311,8 @@ export function MakeScreen({ onMap, fixture = false }: { onMap: () => void; fixt
   );
 }
 
-function freeze(moment: Moment): Moment {
-  return { ...moment, at: new Date() };
+function freeze(moment: Moment, captured: ReturnType<TelemetryLive['capture']>): Moment {
+  return { ...applyTelemetry(moment, captured.sensors, captured.location), at: new Date() };
 }
 
 const scrollerStyle: CSSProperties = {

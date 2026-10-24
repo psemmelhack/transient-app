@@ -49,6 +49,9 @@ describe('saved style', () => {
     expect(loaded.monoFontId).toBe('plex');
     expect(loaded.measurements.sun).toBe(true);
     expect(loaded.measurements.temperature).toBe(false);
+    expect(loaded.measurements.telemetry).toBe(false);
+    saveStyle({ ...saved, measurements: { ...saved.measurements, telemetry: true } });
+    expect(loadStyle().measurements.telemetry).toBe(true);
     expect(loaded.format).toBe('square');
     expect(loaded.backgroundMode).toBe('manual');
   });
@@ -113,6 +116,7 @@ describe('saved style', () => {
     expect(loaded.temperatureUnit).toBe('F');
     expect(loaded.measurements.temperature).toBe(true);
     expect(loaded.measurements.sun).toBe(false);
+    expect(loaded.measurements.telemetry).toBe(false);
 
     const feed = sanitizeStyle({ ...styleFromPreset(presetById('01')), format: 'feed' });
     expect(feed.format).toBe('square');
