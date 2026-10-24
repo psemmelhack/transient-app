@@ -20,13 +20,13 @@ import {
 import { PRESETS } from '../src/style/presets';
 import type { Style, TempUnit } from '../src/style/types';
 import { Icon, type IconName } from './Icons';
-import { ink, line, mono, muted, paper, serif } from './theme';
+import { ink, line, muted, paper, ui } from './theme';
 
 const SWATCHES = ['#111111', '#FFFFFF', '#D2231C', '#4B1C40', '#1E3A2D', '#CBA65E', '#14203A', '#E3F03A', '#F2E8D5', '#F7E4E1'];
 
 export function Parameters({ style, onChange }: { style: Style; onChange: (next: Style) => void }) {
   return (
-    <div style={{ maxWidth: 680, margin: '0 auto', padding: '8px 22px 28px', width: '100%' }}>
+    <div style={{ maxWidth: 680, margin: '0 auto', padding: '8px 22px 28px', width: '100%', fontFamily: ui, fontWeight: 400 }}>
       <Section label="Presets">
         <div style={{ display: 'flex', gap: 12, overflowX: 'auto', paddingBottom: 4 }}>
           {PRESETS.map((preset) => {
@@ -54,7 +54,7 @@ export function Parameters({ style, onChange }: { style: Style; onChange: (next:
                     Aa
                   </span>
                 </span>
-                <span style={{ marginTop: 6, fontFamily: mono, fontSize: 10, letterSpacing: '0.08em', color: muted }}>{preset.id}</span>
+                <span style={{ marginTop: 6, fontFamily: ui, fontWeight: 500, fontSize: 10, letterSpacing: '0.14em', color: muted }}>{preset.id}</span>
                 <span style={{ fontFamily: font.family, fontSize: 12, color: ink }}>{preset.name}</span>
               </button>
             );
@@ -157,16 +157,17 @@ export function Parameters({ style, onChange }: { style: Style; onChange: (next:
             onClick={() => onChange(withAutoBackground(style))}
             style={{
               ...textChoice,
-              fontFamily: mono,
+              fontFamily: ui,
+              fontWeight: 500,
               fontSize: 12,
-              letterSpacing: '0.12em',
+              letterSpacing: '0.14em',
               textTransform: 'uppercase',
               boxShadow: style.backgroundMode === 'auto' ? `inset 0 0 0 1px ${ink}` : `inset 0 0 0 1px ${line}`,
             }}
           >
             Auto
           </button>
-          <span style={{ fontFamily: mono, fontSize: 12, color: muted }}>{formatContrast(contrastRatio(style.textColor, style.backgroundColor))}</span>
+          <span style={{ fontFamily: ui, fontWeight: 400, fontSize: 12, letterSpacing: '0.04em', color: muted }}>{formatContrast(contrastRatio(style.textColor, style.backgroundColor))}</span>
         </div>
         <Swatches value={style.backgroundColor} onPick={(hex) => onChange(withBackground(style, hex))} />
         <HexField label="Background color hex" value={style.backgroundColor} onCommit={(hex) => onChange(withBackground(style, hex))} />
@@ -199,7 +200,8 @@ export function Parameters({ style, onChange }: { style: Style; onChange: (next:
                         onClick={() => onChange(withTemperatureUnit(style, unit))}
                         style={{
                           ...textChoice,
-                          fontFamily: mono,
+                          fontFamily: ui,
+                          fontWeight: 500,
                           fontSize: 13,
                           boxShadow: style.temperatureUnit === unit ? `inset 0 0 0 1px ${ink}` : `inset 0 0 0 1px ${line}`,
                         }}
@@ -289,7 +291,8 @@ function HexField({ value, onCommit, label }: { value: string; onCommit: (hex: s
         border: 'none',
         borderBottom: `1px solid ${line}`,
         background: 'transparent',
-        fontFamily: mono,
+        fontFamily: ui,
+        fontWeight: 400,
         fontSize: 13,
         color: ink,
         padding: '6px 0',
@@ -331,9 +334,9 @@ function Toggle({ on }: { on: boolean }) {
 
 const sectionLabel: CSSProperties = {
   margin: '0 0 12px',
-  fontFamily: mono,
+  fontFamily: ui,
   fontSize: 11,
-  fontWeight: 400,
+  fontWeight: 500,
   letterSpacing: '0.16em',
   textTransform: 'uppercase',
   color: muted,
@@ -341,7 +344,8 @@ const sectionLabel: CSSProperties = {
 
 const minorLabel: CSSProperties = {
   margin: '0 0 8px',
-  fontFamily: mono,
+  fontFamily: ui,
+  fontWeight: 500,
   fontSize: 10,
   letterSpacing: '0.14em',
   textTransform: 'uppercase',
@@ -399,7 +403,8 @@ const switchRow: CSSProperties = {
   background: 'transparent',
   color: ink,
   cursor: 'pointer',
-  fontFamily: serif,
-  fontSize: 22,
+  fontFamily: ui,
+  fontWeight: 500,
+  fontSize: 16,
   textAlign: 'left',
 };

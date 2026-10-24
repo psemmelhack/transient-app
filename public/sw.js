@@ -1,7 +1,8 @@
-const CACHE = 'transient-static-v2';
+const CACHE = 'transient-static-v3';
 const ASSETS = [
   'fonts.css',
   'manifest.webmanifest',
+  'fonts/InterVariable.woff2',
   'fonts/Anton-Regular.ttf',
   'fonts/BigShouldersDisplay-wght.ttf',
   'fonts/BodoniModa-opsz-wght.ttf',

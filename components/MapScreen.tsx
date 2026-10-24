@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 import { listTransients, type TransientRecord } from '../src/storage/library';
-import { ink, muted, paper, serif } from './theme';
+import { ink, muted, paper, uiFamily } from './theme';
 
 export function MapScreen({ onBack, active = true }: { onBack: () => void; active?: boolean }) {
   const [records, setRecords] = useState<TransientRecord[]>([]);
@@ -12,15 +12,15 @@ export function MapScreen({ onBack, active = true }: { onBack: () => void; activ
   return (
     <View style={{ flex: 1, backgroundColor: paper }}>
       <Pressable onPress={onBack} style={{ padding: 18 }}>
-        <Text style={{ fontFamily: serif, fontSize: 18, color: ink }}>Back</Text>
+        <Text style={{ fontFamily: uiFamily, fontWeight: '500', fontSize: 16, color: ink }}>Back</Text>
       </Pressable>
-      <Text style={{ fontFamily: serif, fontSize: 28, color: ink, paddingHorizontal: 18 }}>My transients</Text>
+      <Text style={{ fontFamily: uiFamily, fontWeight: '500', fontSize: 22, color: ink, paddingHorizontal: 18 }}>My transients</Text>
       <ScrollView>
-        {records.length === 0 && <Text style={{ color: muted, padding: 18 }}>Nothing saved yet.</Text>}
+        {records.length === 0 && <Text style={{ fontFamily: uiFamily, color: muted, padding: 18 }}>Nothing saved yet.</Text>}
         {records.map((record) => (
           <View key={record.id} style={{ paddingHorizontal: 18, paddingVertical: 12 }}>
-            <Text style={{ color: ink, fontSize: 18 }}>{record.message || 'No note'}</Text>
-            <Text style={{ color: muted }}>{record.capturedAt}</Text>
+            <Text style={{ fontFamily: uiFamily, fontWeight: '500', color: ink, fontSize: 16 }}>{record.message || 'No note'}</Text>
+            <Text style={{ fontFamily: uiFamily, color: muted }}>{record.capturedAt}</Text>
           </View>
         ))}
       </ScrollView>

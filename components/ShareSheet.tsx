@@ -2,7 +2,7 @@ import { useState, type CSSProperties } from 'react';
 import { downloadBlob, fileNameFor } from '../src/export/download';
 import { canShareFiles, openEmail, openSms, sharePng } from '../src/share/share';
 import type { ShareEntry } from '../src/storage/library';
-import { ink, line, mono, muted, paper, serif } from './theme';
+import { ink, line, muted, paper, ui } from './theme';
 
 export function ShareSheet({
   png,
@@ -76,6 +76,9 @@ export function ShareSheet({
         style={{
           width: 'min(440px, 100%)',
           background: paper,
+          color: ink,
+          fontFamily: ui,
+          fontWeight: 400,
           padding: '22px 22px 18px',
           boxShadow: '0 16px 50px rgba(28,27,25,0.16)',
           maxHeight: '80vh',
@@ -83,12 +86,12 @@ export function ShareSheet({
         }}
       >
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-          <h2 style={{ margin: 0, fontFamily: serif, fontWeight: 400, fontSize: 28, color: ink }}>Share</h2>
+          <h2 style={{ margin: 0, fontFamily: ui, fontWeight: 500, fontSize: 22, letterSpacing: '0.02em', color: ink }}>Share</h2>
           <button type="button" onClick={onClose} style={textBtn}>
             Close
           </button>
         </div>
-        <p style={{ margin: '8px 0 16px', fontFamily: serif, fontSize: 16, color: muted }}>A name is optional. Skip it and nothing is remembered.</p>
+        <p style={{ margin: '8px 0 16px', fontFamily: ui, fontWeight: 400, fontSize: 15, color: muted }}>A name is optional. Skip it and nothing is remembered.</p>
         <label style={fieldLabel}>
           To whom
           <input value={name} onChange={(event) => setName(event.target.value)} placeholder="Name" style={field} />
@@ -116,9 +119,10 @@ export function ShareSheet({
 const textBtn: CSSProperties = {
   border: 'none',
   background: 'transparent',
-  fontFamily: mono,
+  fontFamily: ui,
+  fontWeight: 500,
   fontSize: 12,
-  letterSpacing: '0.08em',
+  letterSpacing: '0.12em',
   textTransform: 'uppercase',
   color: muted,
   cursor: 'pointer',
@@ -128,7 +132,8 @@ const textBtn: CSSProperties = {
 const fieldLabel: CSSProperties = {
   display: 'block',
   marginTop: 12,
-  fontFamily: mono,
+  fontFamily: ui,
+  fontWeight: 500,
   fontSize: 10,
   letterSpacing: '0.14em',
   textTransform: 'uppercase',
@@ -142,8 +147,9 @@ const field: CSSProperties = {
   border: 'none',
   borderBottom: `1px solid ${line}`,
   background: 'transparent',
-  fontFamily: serif,
-  fontSize: 20,
+  fontFamily: ui,
+  fontWeight: 400,
+  fontSize: 17,
   color: ink,
   padding: '6px 0 8px',
   outline: 'none',
@@ -153,8 +159,9 @@ const action: CSSProperties = {
   border: 'none',
   background: 'transparent',
   padding: 0,
-  fontFamily: serif,
-  fontSize: 22,
+  fontFamily: ui,
+  fontWeight: 500,
+  fontSize: 16,
   color: ink,
   cursor: 'pointer',
 };
