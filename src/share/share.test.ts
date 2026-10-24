@@ -98,7 +98,7 @@ describe('share payload', () => {
     expect(payload.url).toBeUndefined();
   });
 
-  it('does not download or throw when Save’s sheet is cancelled', async () => {
+  it('does not download or throw when Capture’s sheet is cancelled', async () => {
     const downloads: string[] = [];
     vi.stubGlobal('document', { title: 'Transient' });
     vi.stubGlobal('navigator', {

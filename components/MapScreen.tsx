@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 import { listTransients, type TransientRecord } from '../src/storage/library';
+import { emptyLibrary } from '../src/ui/actions';
 import { ink, muted, paper, uiFamily } from './theme';
 
 export function MapScreen({ onBack, active = true }: { onBack: () => void; active?: boolean }) {
@@ -16,7 +17,7 @@ export function MapScreen({ onBack, active = true }: { onBack: () => void; activ
       </Pressable>
       <Text style={{ fontFamily: uiFamily, fontWeight: '500', fontSize: 22, color: ink, paddingHorizontal: 18 }}>My transients</Text>
       <ScrollView>
-        {records.length === 0 && <Text style={{ fontFamily: uiFamily, color: muted, padding: 18 }}>Nothing saved yet.</Text>}
+        {records.length === 0 && <Text style={{ fontFamily: uiFamily, color: muted, padding: 18 }}>{emptyLibrary}</Text>}
         {records.map((record) => (
           <View key={record.id} style={{ paddingHorizontal: 18, paddingVertical: 12 }}>
             <Text style={{ fontFamily: uiFamily, fontWeight: '500', color: ink, fontSize: 16 }}>{record.message || 'No note'}</Text>

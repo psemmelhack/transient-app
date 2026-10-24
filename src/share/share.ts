@@ -44,7 +44,7 @@ export async function deliverImage(
 }
 
 /**
- * Save puts the image where a phone can add it to Photos.
+ * Capture puts the image where a phone can add it to Photos.
  * When the browser can share a file, this opens the system sheet with that file alone.
  * A download happens only when file sharing is unavailable. Cancelling the sheet does not download.
  */

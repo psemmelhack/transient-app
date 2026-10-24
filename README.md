@@ -9,7 +9,7 @@ npm install
 npx expo start --web
 ```
 
-Open the URL Expo prints. The first screen is the composition, a note, and Save / Share. The style you used last time is restored; a first visit starts on preset 01. Scroll, or tap the sliders icon, and the type, color, layout, and optional data lines come up underneath the preview. The preview stays pinned and updates as you change them.
+Open the URL Expo prints. The first screen is the composition, a note, and Capture / Share. The style you used last time is restored; a first visit starts on preset 01. Scroll, or tap the sliders icon, and the type, color, layout, and optional data lines come up underneath the preview. The preview stays pinned and updates as you change them.
 
 `?fixture=1` freezes the sample place and time (Redondo Beach, 22 Oct 2026, 6:12 PM PDT) so the screen does not ask for location. `?proof=01` through `?proof=09` render one reference poster at export size.
 
@@ -27,9 +27,9 @@ The published site is HTTPS, so the browser can share your location. The page in
 
 ## Architecture
 
-The on-screen preview and the saved PNG are the same DOM stage, drawn at the export pixel size and scaled with CSS for display. The app currently composes in Square (1080×1080). Story (1080×1920) and Feed (1080×1350) remain in the code; set `formatChoiceEnabled` in `src/composition/formats.ts` to show the Format control and honor those ratios again. Poster lines are fit to the width of that stage. Save stamps GPS, time, temperature, and sun position into PNG text metadata.
+The on-screen preview and the saved PNG are the same DOM stage, drawn at the export pixel size and scaled with CSS for display. The app currently composes in Square (1080×1080). Story (1080×1920) and Feed (1080×1350) remain in the code; set `formatChoiceEnabled` in `src/composition/formats.ts` to show the Format control and honor those ratios again. Poster lines are fit to the width of that stage. Capture stamps GPS, time, temperature, and sun position into PNG text metadata.
 
-Save keeps that PNG’s filename. On a phone whose browser can share files, Save opens the system sheet with the image alone, so it can be added to Photos. A desktop browser that cannot share files downloads the PNG instead. Completing either one stores the transient on this device as a save, with no recipient. Cancelling the sheet stores nothing and shows no error. A native build asks for photo-library permission and writes the same file with `expo-media-library`. The native preview does not yet render the export PNG, so that write runs once those bytes exist.
+Capture keeps that PNG’s filename. On a phone whose browser can share files, Capture opens the system sheet with the image alone, so it can be added to Photos. A desktop browser that cannot share files downloads the PNG instead. Completing either one stores the transient on this device as captured, with no recipient. Cancelling the sheet stores nothing and shows no error. A native build asks for photo-library permission and writes the same file with `expo-media-library`. The native preview does not yet render the export PNG, so that write runs once those bytes exist.
 
 Last-used style lives in `localStorage`. Saved transients, including the PNG, live in IndexedDB on this device. There is no account and no backend.
 

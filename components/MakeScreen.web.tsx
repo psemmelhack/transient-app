@@ -19,6 +19,7 @@ import { Icon } from './Icons';
 import { Parameters } from './Parameters';
 import { ShareSheet } from './ShareSheet';
 import { useStyle } from './StyleContext';
+import { captureLabel, capturedToast } from '../src/ui/actions';
 import { ink, line, muted, paper, ui } from './theme';
 
 const NOTE_LIMIT = 200;
@@ -154,7 +155,7 @@ export function MakeScreen({ onMap, fixture = false }: { onMap: () => void; fixt
       const delivered = await saveImage(rendered.png, fileNameFor(frozen.at, frozen.latitude, frozen.longitude), downloadBlob);
       if (delivered === 'cancelled') return;
       await saveTransient(makeRecord({ moment: frozen, style, message: note, scene: rendered.scene, png: rendered.png, shares: [] }));
-      setToast('Saved');
+      setToast(capturedToast);
     } catch {
       setToast('Couldn’t make the image');
     } finally {
@@ -262,12 +263,13 @@ export function MakeScreen({ onMap, fixture = false }: { onMap: () => void; fixt
             <span style={{ fontFamily: ui, fontWeight: 400, fontSize: 12, letterSpacing: '0.04em', color: note.length > 180 ? ink : muted }}>
               {note.length} / {NOTE_LIMIT}
             </span>
-            <div style={{ display: 'flex' }}>
-              <button type="button" aria-label="Save image" disabled={!moment || working} onClick={onSave} style={iconBtn}>
-                <Icon name="download" size={20} color={ink} />
+            <div style={{ display: 'flex', alignItems: 'center', flex: 'none' }}>
+              <button type="button" aria-label={captureLabel} disabled={!moment || working} onClick={onSave} style={textAction(!moment || working)}>
+                {captureLabel}
               </button>
-              <button type="button" aria-label="Share" disabled={!moment || working} onClick={onShare} style={iconBtn}>
-                <Icon name="share" size={20} color={ink} />
+              <span aria-hidden style={{ width: 1, height: 14, background: line, flex: 'none' }} />
+              <button type="button" aria-label="Share" disabled={!moment || working} onClick={onShare} style={textAction(!moment || working)}>
+                Share
               </button>
             </div>
           </div>
@@ -358,6 +360,26 @@ const iconBtn: CSSProperties = {
   cursor: 'pointer',
   color: ink,
 };
+
+function textAction(disabled: boolean): CSSProperties {
+  return {
+    minWidth: 44,
+    minHeight: 44,
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flex: 'none',
+    border: 'none',
+    background: 'transparent',
+    padding: '0 14px',
+    cursor: disabled ? 'default' : 'pointer',
+    fontFamily: ui,
+    fontWeight: 500,
+    fontSize: 14,
+    letterSpacing: '0.04em',
+    color: disabled ? muted : ink,
+  };
+}
 
 const dockStyle: CSSProperties = {
   maxWidth: 680,
