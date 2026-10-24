@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { getFont } from '../composition/fonts';
 import { loadStyle, sanitizeStyle, saveStyle } from './persist';
 import { defaultStyle, presetById, styleFromPreset } from './presets';
 
@@ -50,6 +51,16 @@ describe('saved style', () => {
     expect(loaded.measurements.temperature).toBe(false);
     expect(loaded.format).toBe('square');
     expect(loaded.backgroundMode).toBe('manual');
+  });
+
+  it('maps a saved Italiana face onto DM Serif Display', () => {
+    const loaded = sanitizeStyle({ ...defaultStyle(), displayFontId: 'italiana', presetId: null, textColor: '#14203A', backgroundColor: '#F6F1E6' });
+    expect(getFont('italiana').id).toBe('dm-serif');
+    expect(getFont('italiana').family).toBe('DM Serif Display');
+    expect(loaded.displayFontId).toBe('dm-serif');
+    expect(loaded.textColor).toBe('#14203A');
+    expect(loaded.backgroundColor).toBe('#F6F1E6');
+    expect(loaded.presetId).toBeNull();
   });
 
   it('restores whether Auto is on', () => {
