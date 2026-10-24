@@ -16,7 +16,7 @@ import { Icon } from './Icons';
 import { Parameters } from './Parameters';
 import { ShareSheet } from './ShareSheet';
 import { useStyle } from './StyleContext';
-import { ink, line, mono, muted, paper, serif } from './theme';
+import { ink, line, muted, paper, ui } from './theme';
 
 const NOTE_LIMIT = 200;
 
@@ -217,12 +217,12 @@ export function MakeScreen({ onMap, fixture = false }: { onMap: () => void; fixt
   const sample = shown?.source === 'example' && !fixture;
 
   return (
-    <div style={{ height: '100%', minHeight: 0, background: paper, color: ink }}>
+    <div style={{ height: '100%', minHeight: 0, background: paper, color: ink, fontFamily: ui, fontWeight: 400 }}>
       <style>{chromeCss}</style>
       <div ref={scrollerRef} onScroll={onScroll} style={scrollerStyle}>
         <div ref={pinRef} style={{ ...pinStyle, height: box.pinHeight }}>
           <header style={headerStyle}>
-            <div style={{ fontFamily: serif, fontSize: 22, letterSpacing: '0.01em' }}>Transient</div>
+            <div style={{ fontFamily: ui, fontWeight: 500, fontSize: 20, letterSpacing: '0.04em' }}>Transient</div>
             <div style={{ display: 'flex', alignItems: 'center' }}>
               <button type="button" aria-label="Undo" onClick={undo} style={{ ...iconBtn, opacity: canUndo ? 1 : 0, pointerEvents: canUndo ? 'auto' : 'none' }}>
                 <Icon name="undo" size={20} color={ink} />
@@ -273,7 +273,7 @@ export function MakeScreen({ onMap, fixture = false }: { onMap: () => void; fixt
             />
           </label>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 4 }}>
-            <span style={{ fontFamily: mono, fontSize: 11, color: note.length > 180 ? ink : muted }}>
+            <span style={{ fontFamily: ui, fontWeight: 400, fontSize: 12, letterSpacing: '0.04em', color: note.length > 180 ? ink : muted }}>
               {note.length} / {NOTE_LIMIT}
             </span>
             <div style={{ display: 'flex' }}>
@@ -381,8 +381,9 @@ const noteStyle: CSSProperties = {
   border: 'none',
   borderBottom: `1px solid ${line}`,
   background: 'transparent',
-  fontFamily: serif,
-  fontSize: 22,
+  fontFamily: ui,
+  fontWeight: 400,
+  fontSize: 17,
   lineHeight: 1.35,
   color: ink,
   padding: '8px 0',
@@ -391,8 +392,10 @@ const noteStyle: CSSProperties = {
 
 const sampleStyle: CSSProperties = {
   margin: '8px 0 0',
-  fontFamily: mono,
-  fontSize: 11,
+  fontFamily: ui,
+  fontWeight: 400,
+  fontSize: 12,
+  letterSpacing: '0.02em',
   color: muted,
 };
 
@@ -400,8 +403,9 @@ const retryStyle: CSSProperties = {
   border: 'none',
   background: 'transparent',
   padding: 0,
-  fontFamily: mono,
-  fontSize: 11,
+  fontFamily: ui,
+  fontWeight: 500,
+  fontSize: 12,
   color: ink,
   cursor: 'pointer',
   textDecoration: 'underline',
@@ -416,7 +420,8 @@ const toastStyle: CSSProperties = {
   zIndex: 40,
   background: ink,
   color: paper,
-  fontFamily: mono,
+  fontFamily: ui,
+  fontWeight: 500,
   fontSize: 12,
   letterSpacing: '0.08em',
   padding: '8px 14px',

@@ -3,7 +3,7 @@ import { LngLatBounds, Map as MapLibre, Marker } from 'maplibre-gl';
 import { listTransients, type ShareEntry, type TransientRecord } from '../src/storage/library';
 import { Icon } from './Icons';
 import { publicAssetUrl } from '../src/web/publicUrl';
-import { ink, line, mono, muted, paper, serif } from './theme';
+import { ink, line, muted, paper, ui } from './theme';
 
 const STYLE_URL = 'https://tiles.openfreemap.org/styles/positron';
 
@@ -111,13 +111,13 @@ export function MapScreen({ onBack, active = true }: { onBack: () => void; activ
   const selected = records.find((record) => record.id === selectedId) ?? null;
 
   return (
-    <div style={{ height: '100%', minHeight: 0, display: 'flex', flexDirection: 'column', background: paper, color: ink }}>
+    <div style={{ height: '100%', minHeight: 0, display: 'flex', flexDirection: 'column', background: paper, color: ink, fontFamily: ui, fontWeight: 400 }}>
       <style>{mapCss}</style>
       <header style={{ height: 56, display: 'flex', alignItems: 'center', gap: 8, padding: '0 18px', flex: 'none' }}>
         <button type="button" aria-label="Back" onClick={onBack} style={backBtn}>
           <Icon name="back" size={20} color={ink} />
         </button>
-        <div style={{ fontFamily: serif, fontSize: 22 }}>My transients</div>
+        <div style={{ fontFamily: ui, fontWeight: 500, fontSize: 20, letterSpacing: '0.02em' }}>My transients</div>
       </header>
       <div className="map-body">
         <div ref={hostRef} className="map-canvas" />
@@ -140,8 +140,8 @@ export function MapScreen({ onBack, active = true }: { onBack: () => void; activ
                 color: ink,
               }}
             >
-              <div style={{ fontFamily: serif, fontSize: 18 }}>{record.message || 'No note'}</div>
-              <div style={{ fontFamily: mono, fontSize: 11, color: muted, marginTop: 4 }}>{formatWhen(record.capturedAt, record.timezone)}</div>
+              <div style={{ fontFamily: ui, fontWeight: 500, fontSize: 16 }}>{record.message || 'No note'}</div>
+              <div style={{ fontFamily: ui, fontWeight: 400, fontSize: 12, letterSpacing: '0.02em', color: muted, marginTop: 4 }}>{formatWhen(record.capturedAt, record.timezone)}</div>
             </button>
           ))}
           {selected && (
@@ -149,16 +149,16 @@ export function MapScreen({ onBack, active = true }: { onBack: () => void; activ
               {urls[selected.id] && (
                 <img src={urls[selected.id]} alt="" style={{ width: '100%', height: 'auto', boxShadow: '0 0 0 1px rgba(28,27,25,0.14)' }} />
               )}
-              <p style={{ fontFamily: serif, fontSize: 22, margin: '14px 0 6px' }}>{selected.message || 'No note'}</p>
-              <p style={{ fontFamily: mono, fontSize: 12, color: muted, margin: 0 }}>{formatWhen(selected.capturedAt, selected.timezone)}</p>
-              {selected.placeFull && <p style={{ fontFamily: mono, fontSize: 12, color: muted, margin: '4px 0 0' }}>{selected.placeFull}</p>}
+              <p style={{ fontFamily: ui, fontWeight: 500, fontSize: 18, margin: '14px 0 6px' }}>{selected.message || 'No note'}</p>
+              <p style={{ fontFamily: ui, fontWeight: 400, fontSize: 13, color: muted, margin: 0 }}>{formatWhen(selected.capturedAt, selected.timezone)}</p>
+              {selected.placeFull && <p style={{ fontFamily: ui, fontWeight: 400, fontSize: 13, color: muted, margin: '4px 0 0' }}>{selected.placeFull}</p>}
               {selected.lines.length > 0 && (
-                <p style={{ fontFamily: mono, fontSize: 12, color: ink, margin: '10px 0 0' }}>{selected.lines.map((item) => item.text).join(' · ')}</p>
+                <p style={{ fontFamily: ui, fontWeight: 400, fontSize: 13, letterSpacing: '0.01em', color: ink, margin: '10px 0 0' }}>{selected.lines.map((item) => item.text).join(' · ')}</p>
               )}
               <div style={{ marginTop: 14 }}>
-                {selected.shares.length === 0 && <div style={{ fontFamily: mono, fontSize: 12, color: muted }}>Not shared</div>}
+                {selected.shares.length === 0 && <div style={{ fontFamily: ui, fontWeight: 400, fontSize: 13, color: muted }}>Not shared</div>}
                 {selected.shares.map((entry) => (
-                  <div key={entry.id} style={{ fontFamily: mono, fontSize: 12, color: ink, marginTop: 4 }}>
+                  <div key={entry.id} style={{ fontFamily: ui, fontWeight: 400, fontSize: 13, color: ink, marginTop: 4 }}>
                     {shareLabel(entry)}
                   </div>
                 ))}
@@ -209,8 +209,9 @@ const backBtn: CSSProperties = {
 };
 
 const emptyStyle: CSSProperties = {
-  fontFamily: serif,
-  fontSize: 22,
+  fontFamily: ui,
+  fontWeight: 400,
+  fontSize: 18,
   color: muted,
   padding: '24px 16px',
   margin: 0,
@@ -220,7 +221,7 @@ const mapCss = `
   .map-body { flex: 1; min-height: 0; display: flex; flex-direction: column; }
   .map-canvas { flex: 1; min-height: 240px; }
   .map-side { max-height: 46%; overflow: auto; border-top: 1px solid ${line}; background: ${paper}; }
-  .maplibregl-ctrl-attrib { font-size: 10px; }
+  .maplibregl-ctrl-attrib, .maplibregl-ctrl-attrib a { font-family: ${ui}; font-weight: 400; font-size: 10px; letter-spacing: 0.02em; }
   @media (min-width: 840px) {
     .map-body { flex-direction: row; }
     .map-canvas { min-height: 0; }
