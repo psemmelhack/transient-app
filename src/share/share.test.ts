@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { fileNameFor } from '../export/download';
-import { deliverImage, sharePng, webSharePayload } from './share';
+import { deliverImage, saveImage, sharePng, webSharePayload } from './share';
 
 const filename = '38.261602_-122.048768_20261024T041839Z.png';
 
@@ -71,6 +71,71 @@ describe('share payload', () => {
       downloads.push('no');
     });
     expect(result).toBe('cancelled');
+    expect(downloads).toEqual([]);
+  });
+
+  it('saves through the system sheet with the image file alone', async () => {
+    const downloads: string[] = [];
+    const seen: unknown[] = [];
+    vi.stubGlobal('document', { title: 'Transient' });
+    vi.stubGlobal('navigator', {
+      canShare: () => true,
+      share: async (data: unknown) => {
+        seen.push(data);
+      },
+    });
+    const result = await saveImage(new Blob(['png'], { type: 'image/png' }), filename, () => {
+      downloads.push('no');
+    });
+    expect(result).toBe('shared');
+    expect(downloads).toEqual([]);
+    const payload = seen[0] as { files: File[]; title?: string; text?: string; url?: string };
+    expect(Object.keys(payload)).toEqual(['files']);
+    expect(payload.files[0].name).toBe(filename);
+    expect(payload.files[0].type).toBe('image/png');
+    expect(payload.title).toBeUndefined();
+    expect(payload.text).toBeUndefined();
+    expect(payload.url).toBeUndefined();
+  });
+
+  it('does not download or throw when Save’s sheet is cancelled', async () => {
+    const downloads: string[] = [];
+    vi.stubGlobal('document', { title: 'Transient' });
+    vi.stubGlobal('navigator', {
+      canShare: () => true,
+      share: async () => {
+        throw new DOMException('cancelled', 'AbortError');
+      },
+    });
+    const result = await saveImage(new Blob(['png'], { type: 'image/png' }), filename, () => {
+      downloads.push('no');
+    });
+    expect(result).toBe('cancelled');
+    expect(downloads).toEqual([]);
+  });
+
+  it('downloads only when the browser cannot share files', async () => {
+    const downloads: string[] = [];
+    vi.stubGlobal('navigator', {});
+    const result = await saveImage(new Blob(['png'], { type: 'image/png' }), filename, (_blob, name) => {
+      downloads.push(name);
+    });
+    expect(result).toBe('downloaded');
+    expect(downloads).toEqual([filename]);
+  });
+
+  it('does not download when file sharing exists but the sheet fails to open', async () => {
+    const downloads: string[] = [];
+    vi.stubGlobal('document', { title: 'Transient' });
+    vi.stubGlobal('navigator', {
+      canShare: () => true,
+      share: async () => {
+        throw new DOMException('denied', 'NotAllowedError');
+      },
+    });
+    await expect(saveImage(new Blob(['png'], { type: 'image/png' }), filename, () => downloads.push('no'))).rejects.toThrow(
+      'Could not open the share sheet',
+    );
     expect(downloads).toEqual([]);
   });
 

@@ -13,7 +13,8 @@
     "ios": {
       "supportsTablet": true,
       "infoPlist": {
-        "NSLocationWhenInUseUsageDescription": "Transient uses your location to record where you are."
+        "NSLocationWhenInUseUsageDescription": "Transient uses your location to record where you are.",
+        "NSPhotoLibraryAddUsageDescription": "Transient saves the image to your photos."
       }
     },
     "android": {
@@ -40,6 +41,14 @@
         "expo-location",
         {
           "locationWhenInUsePermission": "Transient uses your location to record where you are."
+        }
+      ],
+      [
+        "expo-media-library",
+        {
+          "photosPermission": false,
+          "savePhotosPermission": "Transient saves the image to your photos.",
+          "granularPermissions": ["photo"]
         }
       ]
     ]

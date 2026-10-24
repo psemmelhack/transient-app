@@ -42,3 +42,20 @@ export async function deliverImage(
   download(blob, filename);
   return 'downloaded';
 }
+
+/**
+ * Save puts the image where a phone can add it to Photos.
+ * When the browser can share a file, this opens the system sheet with that file alone.
+ * A download happens only when file sharing is unavailable. Cancelling the sheet does not download.
+ */
+export async function saveImage(
+  blob: Blob,
+  filename: string,
+  download: (blob: Blob, filename: string) => void,
+): Promise<'shared' | 'cancelled' | 'downloaded'> {
+  const result = await sharePng(blob, filename);
+  if (result === 'shared' || result === 'cancelled') return result;
+  if (canShareFiles()) throw new Error('Could not open the share sheet');
+  download(blob, filename);
+  return 'downloaded';
+}
