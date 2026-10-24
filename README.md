@@ -29,6 +29,8 @@ The published site is HTTPS, so the browser can share your location. The page in
 
 The on-screen preview and the saved PNG are the same DOM stage, drawn at the export pixel size and scaled with CSS for display. The app currently composes in Square (1080×1080). Story (1080×1920) and Feed (1080×1350) remain in the code; set `formatChoiceEnabled` in `src/composition/formats.ts` to show the Format control and honor those ratios again. Poster lines are fit to the width of that stage. Save stamps GPS, time, temperature, and sun position into PNG text metadata.
 
+Save keeps that PNG’s filename. On a phone whose browser can share files, Save opens the system sheet with the image alone, so it can be added to Photos. A desktop browser that cannot share files downloads the PNG instead. Completing either one stores the transient on this device as a save, with no recipient. Cancelling the sheet stores nothing and shows no error. A native build asks for photo-library permission and writes the same file with `expo-media-library`. The native preview does not yet render the export PNG, so that write runs once those bytes exist.
+
 Last-used style lives in `localStorage`. Saved transients, including the PNG, live in IndexedDB on this device. There is no account and no backend.
 
 Optional measurements are a small plugin list (`src/data/plugins.ts`): temperature from Open-Meteo (no key; the line is omitted if the request fails) and sun azimuth and altitude computed locally from time and coordinates. Both are off until turned on in the style controls. Accuracy is shown when a GPS fix includes it.

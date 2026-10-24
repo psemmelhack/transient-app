@@ -3,6 +3,7 @@ import { flushSync } from 'react-dom';
 import { buildScene } from '../src/composition/scene';
 import { captureStage } from '../src/export/capture';
 import { downloadBlob, fileNameFor } from '../src/export/download';
+import { saveImage } from '../src/share/share';
 import { insertPngText, metadataFor } from '../src/export/pngMeta';
 import { previewBox, PIN_HEADER } from '../src/layout/previewSize';
 import { useMoment } from '../src/location/useMoment';
@@ -142,8 +143,9 @@ export function MakeScreen({ onMap, fixture = false }: { onMap: () => void; fixt
     try {
       const frozen = freeze(moment);
       const rendered = await renderPng(frozen);
+      const delivered = await saveImage(rendered.png, fileNameFor(frozen.at, frozen.latitude, frozen.longitude), downloadBlob);
+      if (delivered === 'cancelled') return;
       await saveTransient(makeRecord({ moment: frozen, style, message: note, scene: rendered.scene, png: rendered.png, shares: [] }));
-      downloadBlob(rendered.png, fileNameFor(frozen.at, frozen.latitude, frozen.longitude));
       setToast('Saved');
     } catch {
       setToast('Couldn’t make the image');
