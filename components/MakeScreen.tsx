@@ -8,26 +8,27 @@ import { PRESETS } from '../src/style/presets';
 import { withPreset } from '../src/style/edit';
 import { CompositionStage } from './CompositionStage';
 import { useStyle } from './StyleContext';
+import { captureLabel, capturedToPhotos, capturePending } from '../src/ui/actions';
 import { ink, line, muted, paper, uiFamily } from './theme';
 
 export function MakeScreen({ onMap, fixture = false }: { onMap: () => void; fixture?: boolean }) {
   const { style, update } = useStyle();
   const { moment, now } = useMoment(fixture);
   const [note, setNote] = useState('');
-  const [notice, setNotice] = useState('Saving the image runs in the browser.');
+  const [notice, setNotice] = useState(capturePending);
   const scene = useMemo(() => buildScene(style, moment, note, moment?.at ?? now), [style, moment, note, now]);
 
   async function onSave() {
     if (!moment) return;
     const png = await captureNativePoster();
     if (!png) {
-      setNotice('Saving the image runs in the browser.');
+      setNotice(capturePending);
       return;
     }
     const result = await savePngToPhotos(fileNameFor(moment.at, moment.latitude, moment.longitude), png);
-    if (result === 'saved') setNotice('Saved to Photos');
+    if (result === 'saved') setNotice(capturedToPhotos);
     else if (result === 'denied') setNotice('Photo access is off.');
-    else setNotice('Saving the image runs in the browser.');
+    else setNotice(capturePending);
   }
   return (
     <ScrollView style={{ flex: 1, backgroundColor: paper }} contentContainerStyle={{ padding: 18 }}>
@@ -47,8 +48,8 @@ export function MakeScreen({ onMap, fixture = false }: { onMap: () => void; fixt
         multiline
         style={{ marginTop: 16, borderBottomWidth: 1, borderBottomColor: line, fontFamily: uiFamily, fontSize: 17, color: ink, paddingVertical: 8 }}
       />
-      <Pressable onPress={() => void onSave()} style={{ marginTop: 12 }}>
-        <Text style={{ fontFamily: uiFamily, fontWeight: '500', color: ink }}>Save</Text>
+      <Pressable accessibilityLabel={captureLabel} onPress={() => void onSave()} style={{ marginTop: 12, minHeight: 44, justifyContent: 'center' }}>
+        <Text style={{ fontFamily: uiFamily, fontWeight: '500', fontSize: 15, color: ink }}>{captureLabel}</Text>
       </Pressable>
       <Text style={{ fontFamily: uiFamily, color: muted, marginTop: 8 }}>{notice}</Text>
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 16 }}>

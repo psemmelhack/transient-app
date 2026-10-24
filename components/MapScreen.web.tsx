@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { LngLatBounds, Map as MapLibre, Marker } from 'maplibre-gl';
 import { listTransients, type ShareEntry, type TransientRecord } from '../src/storage/library';
+import { capturedUnshared, emptyLibrary } from '../src/ui/actions';
 import { Icon } from './Icons';
 import { publicAssetUrl } from '../src/web/publicUrl';
 import { ink, line, muted, paper, ui } from './theme';
@@ -122,7 +123,7 @@ export function MapScreen({ onBack, active = true }: { onBack: () => void; activ
       <div className="map-body">
         <div ref={hostRef} className="map-canvas" />
         <aside className="map-side">
-          {records.length === 0 && <p style={emptyStyle}>Nothing saved yet.</p>}
+          {records.length === 0 && <p style={emptyStyle}>{emptyLibrary}</p>}
           {records.map((record) => (
             <button
               key={record.id}
@@ -156,7 +157,7 @@ export function MapScreen({ onBack, active = true }: { onBack: () => void; activ
                 <p style={{ fontFamily: ui, fontWeight: 400, fontSize: 13, letterSpacing: '0.01em', color: ink, margin: '10px 0 0' }}>{selected.lines.map((item) => item.text).join(' · ')}</p>
               )}
               <div style={{ marginTop: 14 }}>
-                {selected.shares.length === 0 && <div style={{ fontFamily: ui, fontWeight: 400, fontSize: 13, color: muted }}>Not shared</div>}
+                {selected.shares.length === 0 && <div style={{ fontFamily: ui, fontWeight: 400, fontSize: 13, color: muted }}>{capturedUnshared}</div>}
                 {selected.shares.map((entry) => (
                   <div key={entry.id} style={{ fontFamily: ui, fontWeight: 400, fontSize: 13, color: ink, marginTop: 4 }}>
                     {shareLabel(entry)}

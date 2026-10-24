@@ -4,8 +4,6 @@ export type IconName =
   | 'die'
   | 'sliders'
   | 'map'
-  | 'download'
-  | 'share'
   | 'undo'
   | 'close'
   | 'back'
@@ -52,20 +50,6 @@ export function Icon({
         <>
           <Path d="M12 21s6-5.2 6-10a6 6 0 1 0-12 0c0 4.8 6 10 6 10z" {...stroke} />
           <Circle cx="12" cy="11" r="1.7" {...stroke} />
-        </>
-      )}
-      {name === 'download' && (
-        <>
-          <Path d="M12 4.5v9" {...stroke} />
-          <Path d="M8.5 11 12 14.5 15.5 11" {...stroke} />
-          <Path d="M5.5 18.5h13" {...stroke} />
-        </>
-      )}
-      {name === 'share' && (
-        <>
-          <Path d="M12 14.5V5" {...stroke} />
-          <Path d="M8.5 8 12 4.5 15.5 8" {...stroke} />
-          <Path d="M6 11.5v6.5h12v-6.5" {...stroke} />
         </>
       )}
       {name === 'undo' && <Path d="M8 8H4.5V4.5M5 8a7 7 0 1 1-1.2 4" {...stroke} />}
