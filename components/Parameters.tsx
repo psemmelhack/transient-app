@@ -101,6 +101,7 @@ export function Parameters({ style, onChange }: { style: Style; onChange: (next:
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, minWidth: 0, maxWidth: '100%' }}>
               {fontsIn(category.id).map((font) => {
                 const selected = style.displayFontId === font.id;
+                const face = fontCss(resolveFont(font.id, style.monoFontId, 'display'));
                 return (
                   <button
                     key={font.id}
@@ -110,10 +111,7 @@ export function Parameters({ style, onChange }: { style: Style; onChange: (next:
                     style={{
                       ...textChoice,
                       boxShadow: selected ? `inset 0 0 0 1px ${ink}` : 'inset 0 0 0 1px transparent',
-                      fontFamily: `'${font.family}', serif`,
-                      fontWeight: font.weight,
-                      fontStyle: font.style,
-                      fontVariationSettings: font.variation,
+                      ...face,
                     }}
                   >
                     {font.name}

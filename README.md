@@ -37,4 +37,4 @@ Optional measurements are a small plugin list (`src/data/plugins.ts`): temperatu
 
 The map uses MapLibre and the OpenFreeMap Positron style. No API key.
 
-The interface is set in Inter. The poster keeps its own display and mono faces, and the font list shows each of those names in its own face. Ledger uses the bundled Inter, with tabular figures, as its text face. Inter and the poster faces are bundled under `public/fonts` and licensed under the SIL Open Font License. The license texts are in `licenses/`.
+The interface is set in Inter. The poster keeps its own display and mono faces, and the font list shows each of those names in its own face. IBM Plex Mono is selectable in Sans as well as in the mono row. A saved Italiana choice opens as DM Serif Display. Ledger uses the bundled Inter, with tabular figures, as its text face. Inter and the poster faces are bundled under `public/fonts` and licensed under the SIL Open Font License. The license texts are in `licenses/`.

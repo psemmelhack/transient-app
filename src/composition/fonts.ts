@@ -149,15 +149,6 @@ export const FONTS: FontDef[] = [
     italic: false,
   },
   {
-    id: 'italiana',
-    name: 'Italiana',
-    family: 'Italiana',
-    category: 'classic',
-    weight: 400,
-    style: 'normal',
-    italic: false,
-  },
-  {
     id: 'inter',
     name: 'Inter',
     family: 'Inter',
@@ -166,6 +157,15 @@ export const FONTS: FontDef[] = [
     style: 'normal',
     variation: "'wght' 500",
     features: '"tnum" 1, "lnum" 1',
+    italic: false,
+  },
+  {
+    id: 'plex-sans',
+    name: 'IBM Plex Mono',
+    family: 'IBM Plex Mono',
+    category: 'sans',
+    weight: 400,
+    style: 'normal',
     italic: false,
   },
   {
@@ -202,8 +202,14 @@ export const FONTS: FontDef[] = [
 
 const byId = new Map(FONTS.map((font) => [font.id, font]));
 
+/** Saved styles that named a removed face resolve to its replacement. */
+const REPLACED_FONT_IDS: Record<string, string> = {
+  italiana: 'dm-serif',
+};
+
 export function getFont(id: string): FontDef {
-  return byId.get(id) ?? FONTS[0];
+  const resolved = REPLACED_FONT_IDS[id] ?? id;
+  return byId.get(resolved) ?? FONTS[0];
 }
 
 export function displayFonts(): FontDef[] {

@@ -1,4 +1,4 @@
-const CACHE = 'transient-static-v3';
+const CACHE = 'transient-static-v4';
 const ASSETS = [
   'fonts.css',
   'manifest.webmanifest',
@@ -20,7 +20,6 @@ const ASSETS = [
   'fonts/PlayfairDisplay-Italic-wght.ttf',
   'fonts/BebasNeue-Regular.ttf',
   'fonts/DMSerifDisplay-Regular.ttf',
-  'fonts/Italiana-Regular.ttf',
   'fonts/LeagueGothic-wdth.ttf',
 ];
 

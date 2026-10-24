@@ -125,13 +125,6 @@
   font-display: swap;
 }
 @font-face {
-  font-family: 'Italiana';
-  src: url('fonts/Italiana-Regular.ttf') format('truetype');
-  font-weight: 400;
-  font-style: normal;
-  font-display: swap;
-}
-@font-face {
   font-family: 'League Gothic';
   src: url('fonts/LeagueGothic-wdth.ttf') format('truetype');
   font-weight: 400;
