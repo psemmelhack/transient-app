@@ -31,30 +31,14 @@ export async function sharePng(blob: Blob, filename: string): Promise<'shared' |
   }
 }
 
-function openLink(href: string): void {
-  const link = document.createElement('a');
-  link.href = href;
-  link.rel = 'noopener';
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
-}
-
-/** Phone number only. No message body. */
-export function smsHref(address: string): string {
-  const to = address.trim();
-  return to ? `sms:${encodeURIComponent(to)}` : 'sms:';
-}
-
-/** Address only. No subject and no body. */
-export function emailHref(address: string): string {
-  return `mailto:${encodeURIComponent(address.trim())}`;
-}
-
-export function openSms(address: string): void {
-  openLink(smsHref(address));
-}
-
-export function openEmail(address: string): void {
-  openLink(emailHref(address));
+/** System share sheet when the browser can share a file. Otherwise download the image. */
+export async function deliverImage(
+  blob: Blob,
+  filename: string,
+  download: (blob: Blob, filename: string) => void,
+): Promise<'shared' | 'cancelled' | 'downloaded'> {
+  const result = await sharePng(blob, filename);
+  if (result === 'shared' || result === 'cancelled') return result;
+  download(blob, filename);
+  return 'downloaded';
 }

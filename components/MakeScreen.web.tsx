@@ -31,7 +31,7 @@ export function MakeScreen({ onMap, fixture = false }: { onMap: () => void; fixt
   const { moment, now, retry } = useMoment(fixture);
   const [note, setNote] = useState('');
   const [lock, setLock] = useState<Moment | null>(null);
-  const [engaged, setEngaged] = useState(false);
+  const [atControls, setAtControls] = useState(false);
   const [viewport, setViewport] = useState({ width: 390, height: 800 });
   const [dockHeight, setDockHeight] = useState(156);
   const [roll, setRoll] = useState(0);
@@ -44,7 +44,6 @@ export function MakeScreen({ onMap, fixture = false }: { onMap: () => void; fixt
   const dockRef = useRef<HTMLDivElement>(null);
   const paramsRef = useRef<HTMLDivElement>(null);
   const stageRef = useRef<HTMLElement | null>(null);
-  const wantReveal = useRef(false);
 
   const shown = lock ?? moment;
   const scene = useMemo(() => buildScene(style, shown, note, shown?.at ?? now), [style, shown, note, now]);
@@ -53,7 +52,6 @@ export function MakeScreen({ onMap, fixture = false }: { onMap: () => void; fixt
     sceneHeight: scene.height,
     viewportWidth: viewport.width,
     viewportHeight: viewport.height,
-    engaged,
     dockHeight,
   });
 
@@ -78,19 +76,6 @@ export function MakeScreen({ onMap, fixture = false }: { onMap: () => void; fixt
   }, []);
 
   useEffect(() => {
-    if (!engaged || !wantReveal.current) return;
-    const timer = window.setTimeout(() => {
-      wantReveal.current = false;
-      const scroller = scrollerRef.current;
-      const params = paramsRef.current;
-      const pin = pinRef.current;
-      if (!scroller || !params || !pin) return;
-      scroller.scrollTo({ top: Math.max(0, params.offsetTop - pin.offsetHeight + 4), behavior: 'smooth' });
-    }, 340);
-    return () => window.clearTimeout(timer);
-  }, [engaged, box.pinHeight]);
-
-  useEffect(() => {
     if (!toast) return;
     const timer = window.setTimeout(() => setToast(null), 2400);
     return () => window.clearTimeout(timer);
@@ -98,30 +83,21 @@ export function MakeScreen({ onMap, fixture = false }: { onMap: () => void; fixt
 
   function onScroll() {
     const scroller = scrollerRef.current;
-    if (!scroller || wantReveal.current) return;
-    const y = scroller.scrollTop;
-    if (!engaged && y > 56) setEngaged(true);
-    else if (engaged && y <= 1) setEngaged(false);
+    if (!scroller) return;
+    const next = scroller.scrollTop > 8;
+    setAtControls((prev) => (prev === next ? prev : next));
   }
 
   function onStyle() {
     const scroller = scrollerRef.current;
-    if (!scroller) return;
-    if (engaged && scroller.scrollTop > 8) {
-      wantReveal.current = false;
+    const params = paramsRef.current;
+    const pin = pinRef.current;
+    if (!scroller || !params || !pin) return;
+    if (scroller.scrollTop > 8) {
       scroller.scrollTo({ top: 0, behavior: 'smooth' });
       return;
     }
-    wantReveal.current = true;
-    setEngaged(true);
-    if (engaged) {
-      const params = paramsRef.current;
-      const pin = pinRef.current;
-      if (params && pin) {
-        wantReveal.current = false;
-        scroller.scrollTo({ top: Math.max(0, params.offsetTop - pin.offsetHeight + 4), behavior: 'smooth' });
-      }
-    }
+    scroller.scrollTo({ top: Math.max(0, params.offsetTop - pin.offsetHeight + 4), behavior: 'smooth' });
   }
 
   function onDie() {
@@ -192,7 +168,7 @@ export function MakeScreen({ onMap, fixture = false }: { onMap: () => void; fixt
     }
   }
 
-  async function onShared(entry: ShareEntry) {
+  async function onShared(entry: ShareEntry, delivered: 'shared' | 'downloaded') {
     if (!pending) return;
     try {
       await saveTransient(
@@ -205,7 +181,7 @@ export function MakeScreen({ onMap, fixture = false }: { onMap: () => void; fixt
           shares: [entry],
         }),
       );
-      setToast('Shared');
+      setToast(delivered === 'downloaded' ? 'Downloaded' : 'Shared');
     } catch {
       setToast('Couldn’t keep the record');
     } finally {
@@ -232,7 +208,7 @@ export function MakeScreen({ onMap, fixture = false }: { onMap: () => void; fixt
                   <Icon name="die" size={20} color={ink} />
                 </span>
               </button>
-              <button type="button" aria-label={engaged ? 'Hide style' : 'Style'} aria-pressed={engaged} onClick={onStyle} style={iconBtn}>
+              <button type="button" aria-label={atControls ? 'Hide style' : 'Style'} aria-pressed={atControls} onClick={onStyle} style={iconBtn}>
                 <Icon name="sliders" size={20} color={ink} />
               </button>
               <button type="button" aria-label="My transients" onClick={onMap} style={iconBtn}>
@@ -299,7 +275,7 @@ export function MakeScreen({ onMap, fixture = false }: { onMap: () => void; fixt
 
         <div ref={paramsRef} style={{ scrollMarginTop: box.pinHeight, width: '100%', minWidth: 0, boxSizing: 'border-box' }}>
           <Parameters style={style} onChange={update} />
-          <div style={{ height: Math.max(48, viewport.height - box.pinHeight) }} />
+          <div style={{ height: 'max(64px, env(safe-area-inset-bottom))' }} />
         </div>
       </div>
 
