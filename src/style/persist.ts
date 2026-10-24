@@ -1,6 +1,6 @@
 import { isHex, normalizeHex } from '../color/oklch';
 import { getFont } from '../composition/fonts';
-import { FORMATS, type FormatId } from '../composition/formats';
+import { FORMATS, resolvedFormat, type FormatId } from '../composition/formats';
 import { RECIPES } from '../composition/recipes';
 import { defaultMeasurements } from '../data/plugins';
 import { defaultStyle } from './presets';
@@ -41,7 +41,7 @@ export function sanitizeStyle(input: unknown): Style {
     recipeId,
     layout: isLayout(raw.layout) ? raw.layout : base.layout,
     align: isAlign(raw.align) ? raw.align : base.align,
-    format: isFormat(raw.format) ? raw.format : base.format,
+    format: resolvedFormat(isFormat(raw.format) ? raw.format : base.format),
     textColor: typeof raw.textColor === 'string' && isHex(raw.textColor) ? normalizeHex(raw.textColor) : base.textColor,
     backgroundColor:
       typeof raw.backgroundColor === 'string' && isHex(raw.backgroundColor)

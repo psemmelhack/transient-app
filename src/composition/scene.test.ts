@@ -24,7 +24,7 @@ describe('preset compositions', () => {
     ]);
     const scene = buildScene(styleFromPreset(presetById('01')), moment, 'We were here.');
     expect(scene.width).toBe(1080);
-    expect(scene.height).toBe(1350);
+    expect(scene.height).toBe(1080);
     expect(scene.background).toBe('#DCEFE4');
     const footer = scene.nodes.find((node) => node.kind === 'footer') as FooterNode;
     expect(footer.metaLines).toEqual([
@@ -75,15 +75,34 @@ describe('preset compositions', () => {
     expect(scene.background).toBe('#121110');
   });
 
-  it('uses the story frame for Antonio', () => {
+  it('composes Antonio in the square frame', () => {
     const antonio = presetById('05');
     const scene = buildScene(styleFromPreset(antonio), moment, antonio.sampleMessage);
     expect(scene.width).toBe(1080);
-    expect(scene.height).toBe(1920);
+    expect(scene.height).toBe(1080);
+    expect(styleFromPreset(antonio).format).toBe('square');
     expect(scene.background).toBe('#E3F03A');
     const footer = scene.nodes.find((node) => node.kind === 'footer') as FooterNode;
     expect(footer.align).toBe('right');
     expect(footer.metaLines).toContain('latlon.art');
+  });
+
+  it('composes every preset as a square', () => {
+    for (const preset of PRESETS) {
+      const scene = buildScene(styleFromPreset(preset), moment, preset.sampleMessage);
+      expect(scene.width).toBe(1080);
+      expect(scene.height).toBe(1080);
+      expect(styleFromPreset(preset).format).toBe('square');
+    }
+  });
+
+  it('still composes a story when that ratio is passed to the scene', () => {
+    const antonio = presetById('05');
+    const style = { ...styleFromPreset(antonio), format: 'story' as const };
+    const scene = buildScene(style, moment, antonio.sampleMessage);
+    expect(scene.width).toBe(1080);
+    expect(scene.height).toBe(1920);
+    expect(scene.background).toBe('#E3F03A');
   });
 
   it('uses an en dash on the Fraunces square', () => {
@@ -133,7 +152,7 @@ describe('preset compositions', () => {
     const time = quiet.blocks.find((block) => block.kind === 'text' && block.text.includes('October'));
     expect(scene.background).toBe('#F5F3EE');
     expect(scene.width).toBe(1080);
-    expect(scene.height).toBe(1350);
+    expect(scene.height).toBe(1080);
     expect(quiet.align).toBe('left');
     expect(quiet.left).toBeGreaterThanOrEqual(140);
     expect(coords && coords.kind === 'coords' && coords.font.family).toBe('Inter');

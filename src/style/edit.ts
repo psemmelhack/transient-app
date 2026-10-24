@@ -1,6 +1,6 @@
 import { complementaryBackground } from '../color/complement';
 import { isHex, normalizeHex } from '../color/oklch';
-import type { FormatId } from '../composition/formats';
+import { formatChoiceEnabled, type FormatId } from '../composition/formats';
 import { styleFromPreset, type Preset } from './presets';
 import type { Align, LayoutMode, Style, TempUnit } from './types';
 
@@ -25,6 +25,7 @@ export function withAlign(style: Style, align: Align): Style {
 }
 
 export function withFormat(style: Style, format: FormatId): Style {
+  if (!formatChoiceEnabled) return style;
   return leavePreset(style, { format });
 }
 

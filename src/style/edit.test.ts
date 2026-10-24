@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { contrastRatio } from '../color/contrast';
+import { formatChoiceEnabled } from '../composition/formats';
 import { defaultStyle } from './presets';
-import { withAutoBackground, withLayout, withMeasurement, withTextColor } from './edit';
+import { withAutoBackground, withFormat, withLayout, withMeasurement, withTextColor } from './edit';
 
 describe('style edits', () => {
   it('switches layout onto the generic recipe and clears the preset', () => {
@@ -26,5 +27,17 @@ describe('style edits', () => {
     const back = withAutoBackground(next);
     expect(back.measurements.sun).toBe(true);
     expect(back.backgroundMode).toBe('auto');
+  });
+
+  it('keeps Square while the format control is hidden', () => {
+    const current = defaultStyle();
+    const next = withFormat(current, 'story');
+    if (formatChoiceEnabled) {
+      expect(next.format).toBe('story');
+      expect(next.presetId).toBeNull();
+    } else {
+      expect(next).toEqual(current);
+      expect(next.format).toBe('square');
+    }
   });
 });
