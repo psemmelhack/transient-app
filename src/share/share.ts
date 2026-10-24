@@ -1,27 +1,33 @@
+/** Share payload is the image alone. No title, text, or url for the compose sheet to show. */
+export function webSharePayload(file: File): { files: File[] } {
+  return { files: [file] };
+}
+
 export function canShareFiles(): boolean {
   if (typeof navigator === 'undefined' || typeof navigator.canShare !== 'function') return false;
   try {
-    const file = new File([new Blob(['x'], { type: 'image/png' })], 'transient.png', { type: 'image/png' });
-    return navigator.canShare({ files: [file] });
+    const file = new File([new Blob(['x'], { type: 'image/png' })], 'image.png', { type: 'image/png' });
+    return navigator.canShare(webSharePayload(file));
   } catch {
     return false;
   }
 }
 
-export async function sharePng(blob: Blob, filename: string, text: string): Promise<'shared' | 'cancelled' | 'unsupported'> {
+export async function sharePng(blob: Blob, filename: string): Promise<'shared' | 'cancelled' | 'unsupported'> {
   if (typeof navigator === 'undefined' || typeof navigator.share !== 'function') return 'unsupported';
   const file = new File([blob], filename, { type: 'image/png' });
-  if (!navigator.canShare?.({ files: [file] })) return 'unsupported';
+  const payload = webSharePayload(file);
+  if (!navigator.canShare?.(payload)) return 'unsupported';
+  const previousTitle = typeof document === 'undefined' ? '' : document.title;
+  if (typeof document !== 'undefined') document.title = '';
   try {
-    await navigator.share({
-      files: [file],
-      title: 'Transient',
-      text: text.trim() || undefined,
-    });
+    await navigator.share(payload);
     return 'shared';
   } catch (error) {
     if (error instanceof DOMException && error.name === 'AbortError') return 'cancelled';
     return 'unsupported';
+  } finally {
+    if (typeof document !== 'undefined') document.title = previousTitle;
   }
 }
 
@@ -34,16 +40,21 @@ function openLink(href: string): void {
   link.remove();
 }
 
-export function openSms(address: string, body: string): void {
+/** Phone number only. No message body. */
+export function smsHref(address: string): string {
   const to = address.trim();
-  const href = to
-    ? `sms:${encodeURIComponent(to)}?&body=${encodeURIComponent(body)}`
-    : `sms:?&body=${encodeURIComponent(body)}`;
-  openLink(href);
+  return to ? `sms:${encodeURIComponent(to)}` : 'sms:';
 }
 
-export function openEmail(address: string, body: string): void {
-  const to = address.trim();
-  const params = new URLSearchParams({ subject: 'Transient', body });
-  openLink(`mailto:${encodeURIComponent(to)}?${params.toString()}`);
+/** Address only. No subject and no body. */
+export function emailHref(address: string): string {
+  return `mailto:${encodeURIComponent(address.trim())}`;
+}
+
+export function openSms(address: string): void {
+  openLink(smsHref(address));
+}
+
+export function openEmail(address: string): void {
+  openLink(emailHref(address));
 }

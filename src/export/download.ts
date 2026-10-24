@@ -9,7 +9,13 @@ export function downloadBlob(blob: Blob, filename: string): void {
   setTimeout(() => URL.revokeObjectURL(url), 2500);
 }
 
-export function fileNameFor(date: Date): string {
+/** Neutral file name: latitude, longitude, and UTC time. No app name. */
+export function fileNameFor(date: Date, latitude: number, longitude: number): string {
   const stamp = date.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}Z$/, 'Z');
-  return `Transient-${stamp}.png`;
+  return `${coordToken(latitude)}_${coordToken(longitude)}_${stamp}.png`;
+}
+
+function coordToken(value: number): string {
+  const fixed = value.toFixed(6);
+  return fixed === '-0.000000' ? '0.000000' : fixed;
 }

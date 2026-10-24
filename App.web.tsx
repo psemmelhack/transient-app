@@ -20,8 +20,8 @@ export default function App() {
   return (
     <StyleProvider>
       <StatusBar style="dark" />
-      <div style={{ height: '100%', width: '100%', display: 'flex', flexDirection: 'column', background: paper, minHeight: 0 }}>
-        <div style={{ display: screen === 'make' ? 'flex' : 'none', flexDirection: 'column', height: '100%', minHeight: 0 }}>
+      <div style={{ height: '100%', width: '100%', maxWidth: '100%', display: 'flex', flexDirection: 'column', background: paper, minHeight: 0, minWidth: 0, overflow: 'hidden' }}>
+        <div style={{ display: screen === 'make' ? 'flex' : 'none', flexDirection: 'column', height: '100%', width: '100%', minHeight: 0, minWidth: 0 }}>
           <MakeScreen onMap={() => setScreen('map')} fixture={fixture} />
         </div>
         {screen === 'map' && (

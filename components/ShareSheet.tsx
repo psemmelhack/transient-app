@@ -6,14 +6,16 @@ import { ink, line, muted, paper, ui } from './theme';
 
 export function ShareSheet({
   png,
-  note,
   capturedAt,
+  latitude,
+  longitude,
   onClose,
   onComplete,
 }: {
   png: Blob;
-  note: string;
   capturedAt: Date;
+  latitude: number;
+  longitude: number;
   onClose: () => void;
   onComplete: (entry: ShareEntry) => void;
 }) {
@@ -25,11 +27,10 @@ export function ShareSheet({
   async function finish(channel: ShareEntry['channel']) {
     if (busy) return;
     setBusy(true);
-    const filename = fileNameFor(capturedAt);
-    const body = note.trim() || 'A transient.';
+    const filename = fileNameFor(capturedAt, latitude, longitude);
     try {
       if (channel === 'share') {
-        const result = await sharePng(png, filename, note);
+        const result = await sharePng(png, filename);
         if (result === 'cancelled') {
           setBusy(false);
           return;
@@ -37,10 +38,10 @@ export function ShareSheet({
         if (result === 'unsupported') downloadBlob(png, filename);
       } else if (channel === 'sms') {
         downloadBlob(png, filename);
-        openSms(address, body);
+        openSms(address);
       } else {
         downloadBlob(png, filename);
-        openEmail(address, body);
+        openEmail(address);
       }
       onComplete({
         id: crypto.randomUUID(),

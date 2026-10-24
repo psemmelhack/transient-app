@@ -1,4 +1,4 @@
-import { useEffect, useState, type CSSProperties, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { contrastRatio, formatContrast } from '../src/color/contrast';
 import { isHex, normalizeHex } from '../src/color/oklch';
 import { FORMAT_ORDER, FORMATS } from '../src/composition/formats';
@@ -26,9 +26,9 @@ const SWATCHES = ['#111111', '#FFFFFF', '#D2231C', '#4B1C40', '#1E3A2D', '#CBA65
 
 export function Parameters({ style, onChange }: { style: Style; onChange: (next: Style) => void }) {
   return (
-    <div style={{ maxWidth: 680, margin: '0 auto', padding: '8px 22px 28px', width: '100%', fontFamily: ui, fontWeight: 400 }}>
+    <div style={parametersStyle}>
       <Section label="Presets">
-        <div style={{ display: 'flex', gap: 12, overflowX: 'auto', paddingBottom: 4 }}>
+        <HScroll>
           {PRESETS.map((preset) => {
             const font = getFont(preset.displayFontId);
             const selected = style.presetId === preset.id;
@@ -55,11 +55,11 @@ export function Parameters({ style, onChange }: { style: Style; onChange: (next:
                   </span>
                 </span>
                 <span style={{ marginTop: 6, fontFamily: ui, fontWeight: 500, fontSize: 10, letterSpacing: '0.14em', color: muted }}>{preset.id}</span>
-                <span style={{ fontFamily: font.family, fontSize: 12, color: ink }}>{preset.name}</span>
+                <span style={{ fontFamily: font.family, fontSize: 12, color: ink, maxWidth: '100%' }}>{preset.name}</span>
               </button>
             );
           })}
-        </div>
+        </HScroll>
       </Section>
 
       <Section label="Layout">
@@ -95,7 +95,7 @@ export function Parameters({ style, onChange }: { style: Style; onChange: (next:
         {CATEGORIES.filter((category) => category.id !== 'mono').map((category) => (
           <div key={category.id} style={{ marginBottom: 14 }}>
             <div style={minorLabel}>{category.label}</div>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, minWidth: 0, maxWidth: '100%' }}>
               {fontsIn(category.id).map((font) => {
                 const selected = style.displayFontId === font.id;
                 return (
@@ -121,7 +121,7 @@ export function Parameters({ style, onChange }: { style: Style; onChange: (next:
           </div>
         ))}
         <div style={minorLabel}>Small type</div>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, minWidth: 0, maxWidth: '100%' }}>
           {monoFonts().map((font) => {
             const selected = style.monoFontId === font.id;
             return (
@@ -191,7 +191,7 @@ export function Parameters({ style, onChange }: { style: Style; onChange: (next:
                   <Toggle on={on} />
                 </button>
                 {plugin.id === 'temperature' && on && (
-                  <div style={{ display: 'flex', gap: 8, padding: '0 0 12px' }}>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, padding: '0 0 12px', minWidth: 0, maxWidth: '100%' }}>
                     {(['F', 'C', 'both'] as TempUnit[]).map((unit) => (
                       <button
                         key={unit}
@@ -239,7 +239,7 @@ function IconChoice({ icon, label, pressed, onPress }: { icon: IconName; label: 
 function Swatches({ value, onPick }: { value: string; onPick: (hex: string) => void }) {
   const current = normalizeHex(value);
   return (
-    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
+    <HScroll gap={8}>
       {SWATCHES.map((hex) => {
         const selected = current === hex;
         return (
@@ -252,6 +252,8 @@ function Swatches({ value, onPick }: { value: string; onPick: (hex: string) => v
             style={{
               width: 28,
               height: 28,
+              boxSizing: 'border-box',
+              flex: 'none',
               borderRadius: 999,
               padding: 0,
               cursor: 'pointer',
@@ -266,8 +268,40 @@ function Swatches({ value, onPick }: { value: string; onPick: (hex: string) => v
         aria-label="Custom color"
         value={current}
         onChange={(event) => onPick(event.target.value)}
-        style={{ width: 28, height: 28, padding: 0, border: 'none', background: 'transparent', cursor: 'pointer' }}
+        style={{ width: 28, height: 28, boxSizing: 'border-box', flex: 'none', padding: 0, border: 'none', background: 'transparent', cursor: 'pointer' }}
       />
+    </HScroll>
+  );
+}
+
+function HScroll({ children, gap = 12 }: { children: ReactNode; gap?: number }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [edges, setEdges] = useState({ left: false, right: false });
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const measure = () => {
+      const max = el.scrollWidth - el.clientWidth;
+      setEdges({ left: el.scrollLeft > 2, right: max - el.scrollLeft > 2 });
+    };
+    measure();
+    el.addEventListener('scroll', measure, { passive: true });
+    const observer = new ResizeObserver(measure);
+    observer.observe(el);
+    return () => {
+      el.removeEventListener('scroll', measure);
+      observer.disconnect();
+    };
+  }, []);
+
+  return (
+    <div style={{ position: 'relative', minWidth: 0, maxWidth: '100%' }}>
+      <div ref={ref} className="h-scroll" style={{ display: 'flex', gap, overflowX: 'auto', overflowY: 'hidden', paddingBottom: 4, maxWidth: '100%', minWidth: 0 }}>
+        {children}
+      </div>
+      {edges.left && <div className="h-fade h-fade-left" />}
+      {edges.right && <div className="h-fade h-fade-right" />}
     </div>
   );
 }
@@ -314,6 +348,7 @@ function Toggle({ on }: { on: boolean }) {
         background: on ? ink : 'transparent',
         position: 'relative',
         flex: 'none',
+        boxSizing: 'border-box',
       }}
     >
       <span
@@ -352,9 +387,23 @@ const minorLabel: CSSProperties = {
   color: muted,
 };
 
+const parametersStyle: CSSProperties = {
+  maxWidth: 680,
+  margin: '0 auto',
+  width: '100%',
+  minWidth: 0,
+  boxSizing: 'border-box',
+  paddingTop: 8,
+  paddingBottom: 28,
+  paddingLeft: 'max(22px, env(safe-area-inset-left))',
+  paddingRight: 'max(22px, env(safe-area-inset-right))',
+  fontFamily: ui,
+  fontWeight: 400,
+};
+
 const chipButton: CSSProperties = {
   width: 78,
-  flex: 'none',
+  flex: '0 0 78px',
   display: 'flex',
   flexDirection: 'column',
   alignItems: 'flex-start',
@@ -364,6 +413,7 @@ const chipButton: CSSProperties = {
   cursor: 'pointer',
   color: ink,
   textAlign: 'left',
+  boxSizing: 'border-box',
 };
 
 const textChoice: CSSProperties = {
@@ -374,6 +424,10 @@ const textChoice: CSSProperties = {
   padding: '6px 10px',
   fontSize: 20,
   lineHeight: 1.2,
+  maxWidth: '100%',
+  boxSizing: 'border-box',
+  whiteSpace: 'normal',
+  textAlign: 'left',
 };
 
 function iconChoice(pressed: boolean): CSSProperties {
@@ -393,6 +447,9 @@ function iconChoice(pressed: boolean): CSSProperties {
 
 const switchRow: CSSProperties = {
   width: '100%',
+  maxWidth: '100%',
+  minWidth: 0,
+  boxSizing: 'border-box',
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'space-between',
