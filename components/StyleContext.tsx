@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { loadStyle, saveStyle } from '../src/style/persist';
 import { randomStyle } from '../src/style/randomize';
 import type { Style } from '../src/style/types';
@@ -16,6 +16,17 @@ const Ctx = createContext<StyleApi | null>(null);
 export function StyleProvider({ children }: { children: ReactNode }) {
   const [style, setStyle] = useState<Style>(() => loadStyle());
   const [previous, setPrevious] = useState<Style | null>(null);
+
+  useEffect(() => {
+    const onAdopt = (event: Event) => {
+      const next = (event as CustomEvent<Style>).detail;
+      if (!next) return;
+      setPrevious(null);
+      setStyle(next);
+    };
+    window.addEventListener('transient-style-adopted', onAdopt);
+    return () => window.removeEventListener('transient-style-adopted', onAdopt);
+  }, []);
 
   const update = useCallback((next: Style) => {
     setPrevious(null);

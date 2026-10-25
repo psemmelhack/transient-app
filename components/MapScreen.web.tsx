@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { LngLatBounds, Map as MapLibre, Marker } from 'maplibre-gl';
 import { listTransients, type ShareEntry, type TransientRecord } from '../src/storage/library';
-import { capturedUnshared, emptyLibrary } from '../src/ui/actions';
+import { capturedUnshared, emptyLibrary, libraryShareLabel } from '../src/ui/actions';
 import { Icon } from './Icons';
 import { publicAssetUrl } from '../src/web/publicUrl';
 import { ink, line, muted, paper, ui } from './theme';
@@ -15,6 +15,8 @@ export function MapScreen({ onBack, active = true }: { onBack: () => void; activ
   const [records, setRecords] = useState<TransientRecord[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [urls, setUrls] = useState<Record<string, string>>({});
+  const [view, setView] = useState<'map' | 'list'>('map');
+  const focusRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (!active) return;
@@ -109,18 +111,61 @@ export function MapScreen({ onBack, active = true }: { onBack: () => void; activ
     };
   }, [records, mapReady]);
 
+  useEffect(() => {
+    if (view !== 'map') return;
+    const map = mapRef.current;
+    if (!map) return;
+    map.resize();
+    const id = focusRef.current;
+    if (!id) return;
+    const record = records.find((item) => item.id === id);
+    focusRef.current = null;
+    if (record) map.easeTo({ center: [record.longitude, record.latitude], zoom: 13 });
+  }, [view, mapReady, records]);
+
+  function showOnMap(id: string) {
+    focusRef.current = id;
+    setSelectedId(id);
+    setView('map');
+  }
+
   const selected = records.find((record) => record.id === selectedId) ?? null;
 
   return (
-    <div style={{ height: '100%', minHeight: 0, display: 'flex', flexDirection: 'column', background: paper, color: ink, fontFamily: ui, fontWeight: 400 }}>
+    <div style={{ height: '100%', width: '100%', minWidth: 0, minHeight: 0, display: 'flex', flexDirection: 'column', background: paper, color: ink, fontFamily: ui, fontWeight: 400, overflow: 'hidden' }}>
       <style>{mapCss}</style>
-      <header style={{ height: 56, display: 'flex', alignItems: 'center', gap: 8, padding: '0 18px', flex: 'none' }}>
+      <header style={{ height: 56, display: 'flex', alignItems: 'center', gap: 8, padding: '0 12px 0 8px', flex: 'none' }}>
         <button type="button" aria-label="Back" onClick={onBack} style={backBtn}>
           <Icon name="back" size={20} color={ink} />
         </button>
-        <div style={{ fontFamily: ui, fontWeight: 500, fontSize: 20, letterSpacing: '0.02em' }}>My transients</div>
+        <div style={{ flex: 1, minWidth: 0, fontFamily: ui, fontWeight: 500, fontSize: 18, letterSpacing: '0.02em' }}>My transients</div>
+        <div role="group" aria-label="Library view" style={segment}>
+          <button type="button" aria-pressed={view === 'map'} onClick={() => setView('map')} style={segmentButton(view === 'map')}>
+            Map
+          </button>
+          <button type="button" aria-pressed={view === 'list'} onClick={() => setView('list')} style={segmentButton(view === 'list')}>
+            List
+          </button>
+        </div>
       </header>
-      <div className="map-body">
+      {view === 'list' && (
+        <div data-view="list" style={listStyle}>
+          {records.length === 0 && <p style={emptyStyle}>{emptyLibrary}</p>}
+          {records.map((record) => (
+            <button key={record.id} type="button" data-role="library-row" onClick={() => showOnMap(record.id)} style={rowStyle}>
+              <Thumbnail record={record} url={urls[record.id]} />
+              <span style={rowCopy}>
+                <span style={placeStyle}>{record.placeFull || record.placeCity || 'Unplaced'}</span>
+                <span style={metaStyle}>{formatWhen(record.capturedAt, record.timezone)}</span>
+                {record.message && <span style={noteStyle}>{record.message}</span>}
+                <span style={metaStyle}>{formatCoords(record.latitude, record.longitude)}</span>
+                <span style={metaStyle}>{libraryShareLabel(record.shares)}</span>
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
+      <div className="map-body" style={{ display: view === 'map' ? undefined : 'none' }}>
         <div ref={hostRef} className="map-canvas" />
         <aside className="map-side">
           {records.length === 0 && <p style={emptyStyle}>{emptyLibrary}</p>}
@@ -147,7 +192,7 @@ export function MapScreen({ onBack, active = true }: { onBack: () => void; activ
           ))}
           {selected && (
             <div style={{ padding: 16 }}>
-              {urls[selected.id] && (
+              {urls[selected.id] && selected.png.size > 0 && (
                 <img src={urls[selected.id]} alt="" style={{ width: '100%', height: 'auto', boxShadow: '0 0 0 1px rgba(28,27,25,0.14)' }} />
               )}
               <p style={{ fontFamily: ui, fontWeight: 500, fontSize: 18, margin: '14px 0 6px' }}>{selected.message || 'No note'}</p>
@@ -170,6 +215,21 @@ export function MapScreen({ onBack, active = true }: { onBack: () => void; activ
       </div>
     </div>
   );
+}
+
+function Thumbnail({ record, url }: { record: TransientRecord; url?: string }) {
+  if (url && record.png.size > 0) return <img src={url} alt="" style={thumb} />;
+  const background = record.style?.backgroundColor || paper;
+  const color = record.style?.textColor || ink;
+  return (
+    <span aria-hidden style={{ ...thumb, background, display: 'flex', alignItems: 'flex-end', justifyContent: 'flex-end', padding: 6 }}>
+      <span style={{ width: 18, height: 18, background: color }} />
+    </span>
+  );
+}
+
+function formatCoords(latitude: number, longitude: number): string {
+  return `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`;
 }
 
 function formatWhen(iso: string, timeZone: string): string {
@@ -207,6 +267,98 @@ const backBtn: CSSProperties = {
   background: 'transparent',
   padding: 0,
   cursor: 'pointer',
+};
+
+const segment: CSSProperties = {
+  display: 'flex',
+  flex: 'none',
+  border: `1px solid ${line}`,
+};
+
+function segmentButton(on: boolean): CSSProperties {
+  return {
+    minWidth: 52,
+    minHeight: 32,
+    padding: '0 10px',
+    border: 'none',
+    background: on ? 'rgba(28,27,25,0.06)' : 'transparent',
+    color: on ? ink : muted,
+    fontFamily: ui,
+    fontWeight: 500,
+    fontSize: 13,
+    letterSpacing: '0.04em',
+    cursor: 'pointer',
+  };
+}
+
+const listStyle: CSSProperties = {
+  flex: 1,
+  width: '100%',
+  minWidth: 0,
+  minHeight: 0,
+  overflow: 'auto',
+  WebkitOverflowScrolling: 'touch',
+};
+
+const rowStyle: CSSProperties = {
+  display: 'flex',
+  gap: 12,
+  width: '100%',
+  minWidth: 0,
+  maxWidth: '100%',
+  textAlign: 'left',
+  border: 'none',
+  borderBottom: `1px solid ${line}`,
+  background: 'transparent',
+  padding: '12px 16px',
+  cursor: 'pointer',
+  color: ink,
+};
+
+const rowCopy: CSSProperties = {
+  display: 'flex',
+  flexDirection: 'column',
+  minWidth: 0,
+  flex: 1,
+  gap: 2,
+};
+
+const placeStyle: CSSProperties = {
+  fontFamily: ui,
+  fontWeight: 500,
+  fontSize: 16,
+  whiteSpace: 'nowrap',
+  overflow: 'hidden',
+  textOverflow: 'ellipsis',
+};
+
+const noteStyle: CSSProperties = {
+  fontFamily: ui,
+  fontWeight: 400,
+  fontSize: 14,
+  whiteSpace: 'nowrap',
+  overflow: 'hidden',
+  textOverflow: 'ellipsis',
+};
+
+const metaStyle: CSSProperties = {
+  fontFamily: ui,
+  fontWeight: 400,
+  fontSize: 12,
+  letterSpacing: '0.02em',
+  color: muted,
+  whiteSpace: 'nowrap',
+  overflow: 'hidden',
+  textOverflow: 'ellipsis',
+  fontVariantNumeric: 'tabular-nums',
+};
+
+const thumb: CSSProperties = {
+  width: 64,
+  height: 64,
+  flex: 'none',
+  objectFit: 'cover',
+  boxShadow: '0 0 0 1px rgba(28,27,25,0.14)',
 };
 
 const emptyStyle: CSSProperties = {

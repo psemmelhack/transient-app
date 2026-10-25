@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex, nofollow" />
+    <title>Move your transients</title>
+    <style>
+      :root { color-scheme: light; }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; height: 100%; }
+      body {
+        background: #f3f0ea;
+        color: #1c1b19;
+        font-family: Inter, system-ui, sans-serif;
+        font-weight: 400;
+      }
+      main {
+        max-width: 32rem;
+        margin: 0 auto;
+        padding: 48px 22px 64px;
+      }
+      h1 {
+        font-weight: 500;
+        font-size: 28px;
+        letter-spacing: 0.02em;
+        margin: 0 0 28px;
+      }
+      p { font-size: 16px; line-height: 1.45; margin: 0 0 16px; }
+      .count { font-size: 18px; font-weight: 500; }
+      button {
+        margin-top: 12px;
+        min-height: 44px;
+        padding: 0 16px;
+        border: 1px solid #1c1b19;
+        background: #1c1b19;
+        color: #f3f0ea;
+        font: inherit;
+        font-weight: 500;
+        font-size: 15px;
+        letter-spacing: 0.02em;
+        cursor: pointer;
+      }
+      button:disabled { opacity: 0.35; cursor: default; }
+      .quiet { color: #8a8378; font-size: 14px; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Transient</h1>
+      <p id="count" class="count">Looking for saved transients…</p>
+      <p id="note" class="quiet" hidden></p>
+      <button id="move" type="button" hidden>Move them to transient.notarist.art</button>
+      <p id="result" class="quiet" hidden></p>
+    </main>
+    <script>
+      // Same origin as the old site (https://psemmelhack.github.io).
+      // Reads localStorage transient.style.v1 and IndexedDB database transient,
+      // object store transients. Pictures are Blobs, so this page sends them
+      // with postMessage instead of a URL fragment.
+      const STYLE_KEY = 'transient.style.v1';
+      const DB_NAME = 'transient';
+      const STORE_NAME = 'transients';
+      const TARGET = 'https://transient.notarist.art/';
+      const TARGET_ORIGIN = 'https://transient.notarist.art';
+
+      const countEl = document.getElementById('count');
+      const noteEl = document.getElementById('note');
+      const moveEl = document.getElementById('move');
+      const resultEl = document.getElementById('result');
+
+      let payload = { version: 1, style: null, transients: [] };
+
+      function found(count) {
+        countEl.textContent = 'Found ' + count + (count === 1 ? ' transient' : ' transients');
+      }
+
+      function explainEmpty() {
+        noteEl.hidden = false;
+        noteEl.textContent = 'Nothing saved in this browser. If you used Transient from a home-screen icon on iPhone, that copy keeps its own storage, separate from Safari. Open this page in the same place you used the app: the home-screen icon, or the Safari tab where you captured them.';
+      }
+
+      function readStyle() {
+        try {
+          const raw = localStorage.getItem(STYLE_KEY);
+          return raw ? JSON.parse(raw) : null;
+        } catch {
+          return null;
+        }
+      }
+
+      function readTransients() {
+        return new Promise((resolve) => {
+          if (!window.indexedDB) {
+            resolve([]);
+            return;
+          }
+          const request = indexedDB.open(DB_NAME);
+          request.onerror = () => resolve([]);
+          request.onsuccess = () => {
+            const db = request.result;
+            if (!db.objectStoreNames.contains(STORE_NAME)) {
+              db.close();
+              resolve([]);
+              return;
+            }
+            const tx = db.transaction(STORE_NAME, 'readonly');
+            const getAll = tx.objectStore(STORE_NAME).getAll();
+            getAll.onerror = () => {
+              db.close();
+              resolve([]);
+            };
+            getAll.onsuccess = () => {
+              db.close();
+              resolve(getAll.result || []);
+            };
+          };
+        });
+      }
+
+      readTransients().then((transients) => {
+        payload = { version: 1, style: readStyle(), transients };
+        found(transients.length);
+        if (!transients.length) {
+          explainEmpty();
+          return;
+        }
+        noteEl.hidden = false;
+        noteEl.textContent = 'This copies them, pictures included, to transient.notarist.art. A new tab opens to receive them.';
+        moveEl.hidden = false;
+      });
+
+      moveEl.addEventListener('click', () => {
+        resultEl.hidden = true;
+        const child = window.open(TARGET, 'transient-import');
+        if (!child) {
+          resultEl.hidden = false;
+          resultEl.textContent = 'The browser blocked the new tab. Allow it for this page, then try again.';
+          return;
+        }
+        let sent = false;
+        const timer = window.setTimeout(() => {
+          window.removeEventListener('message', onMessage);
+          if (resultEl.hidden) {
+            resultEl.hidden = false;
+            resultEl.textContent = 'The new page didn’t answer. Leave the tab open and try again.';
+          }
+        }, 12000);
+        function onMessage(event) {
+          if (event.origin !== TARGET_ORIGIN || event.source !== child) return;
+          const data = event.data || {};
+          if (data.source !== 'transient') return;
+          if (data.type === 'ready' && !sent) {
+            sent = true;
+            child.postMessage({ source: 'transient-migrate', type: 'import', payload }, TARGET_ORIGIN);
+          }
+          if (data.type === 'imported') {
+            window.clearTimeout(timer);
+            window.removeEventListener('message', onMessage);
+            resultEl.hidden = false;
+            const count = typeof data.count === 'number' ? data.count : payload.transients.length;
+            resultEl.textContent = 'Imported ' + count + (count === 1 ? ' transient' : ' transients') + ' on transient.notarist.art.';
+          }
+        }
+        window.addEventListener('message', onMessage);
+      });
+    </script>
+  </body>
+</html>
