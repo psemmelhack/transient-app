@@ -105,6 +105,16 @@ export type QuietBlockSpec =
       tracking?: number;
     }
   | {
+      kind: 'note';
+      font: FontRole;
+      /** Size for a short note. Longer notes step down from here. */
+      ceiling: number;
+      lineHeight: number;
+      marginTop: number;
+      labelSize: number;
+      tracking: number;
+    }
+  | {
       kind: 'rows';
       labelFont: FontRole;
       valueFont: FontRole;
@@ -251,8 +261,8 @@ export const RECIPES: Record<string, Recipe> = {
     footer: {
       arrangement: 'message-then-split',
       messageFont: 'display-italic',
-      messageSize: 46,
-      messageLineHeight: 1.25,
+      messageSize: 36,
+      messageLineHeight: 1.4,
       messageMargin: 34,
       metaFont: 'mono',
       metaSize: 18,
@@ -284,8 +294,8 @@ export const RECIPES: Record<string, Recipe> = {
     footer: {
       arrangement: 'split',
       messageFont: 'mono-medium',
-      messageSize: 28,
-      messageLineHeight: 1.35,
+      messageSize: 30,
+      messageLineHeight: 1.4,
       messageMaxWidth: 460,
       messageMargin: 16,
       metaFont: 'mono',
@@ -332,7 +342,7 @@ export const RECIPES: Record<string, Recipe> = {
         kind: 'text',
         token: 'date-time-quiet',
         font: 'display',
-        size: 36,
+        size: 40,
         lineHeight: 1.3,
         tracking: 0.02,
         marginTop: 0,
@@ -341,10 +351,9 @@ export const RECIPES: Record<string, Recipe> = {
         kind: 'text',
         token: 'message',
         font: 'display-italic',
-        size: 46,
-        lineHeight: 1.3,
-        marginTop: 70,
-        maxWidth: 820,
+        size: 32,
+        lineHeight: 1.4,
+        marginTop: 48,
       },
       {
         kind: 'meta',
@@ -379,14 +388,14 @@ export const RECIPES: Record<string, Recipe> = {
         degree: false,
         hemisphere: false,
       },
-      { kind: 'rich-time', font: 'display', size: 44, lineHeight: 1.2, marginTop: 44 },
+      { kind: 'rich-time', font: 'display', size: 44, lineHeight: 1.2, marginTop: 36 },
       {
         kind: 'text',
         token: 'message',
         font: 'display-italic',
-        size: 64,
-        lineHeight: 1.15,
-        marginTop: 150,
+        size: 34,
+        lineHeight: 1.4,
+        marginTop: 56,
       },
       {
         kind: 'meta',
@@ -435,7 +444,7 @@ export const RECIPES: Record<string, Recipe> = {
         kind: 'text',
         token: 'date-time-quiet',
         font: 'display',
-        size: 32,
+        size: 36,
         lineHeight: 1.3,
         tracking: 0.01,
         marginTop: 0,
@@ -444,10 +453,9 @@ export const RECIPES: Record<string, Recipe> = {
         kind: 'text',
         token: 'message',
         font: 'display-italic',
-        size: 40,
-        lineHeight: 1.3,
-        marginTop: 48,
-        maxWidth: 820,
+        size: 30,
+        lineHeight: 1.4,
+        marginTop: 36,
       },
       {
         kind: 'meta',
@@ -496,7 +504,7 @@ export const RECIPES: Record<string, Recipe> = {
         kind: 'text',
         token: 'date-time-quiet',
         font: 'display',
-        size: 26,
+        size: 36,
         lineHeight: 1.4,
         tracking: 0.02,
         marginTop: 0,
@@ -505,10 +513,9 @@ export const RECIPES: Record<string, Recipe> = {
         kind: 'text',
         token: 'message',
         font: 'display',
-        size: 32,
+        size: 30,
         lineHeight: 1.4,
-        marginTop: 40,
-        maxWidth: 700,
+        marginTop: 32,
       },
       {
         kind: 'meta',
@@ -568,7 +575,7 @@ export const RECIPES: Record<string, Recipe> = {
         kind: 'text',
         token: 'date-time-quiet',
         font: 'display',
-        size: 28,
+        size: 40,
         lineHeight: 1.35,
         tracking: 0.012,
         marginTop: 0,
@@ -577,10 +584,9 @@ export const RECIPES: Record<string, Recipe> = {
         kind: 'text',
         token: 'message',
         font: 'display-italic',
-        size: 40,
-        lineHeight: 1.28,
-        marginTop: 52,
-        maxWidth: 760,
+        size: 32,
+        lineHeight: 1.4,
+        marginTop: 36,
       },
       {
         kind: 'meta',
@@ -636,8 +642,16 @@ export const RECIPES: Record<string, Recipe> = {
           { label: 'Time', token: 'time-zone' },
           { label: 'Elevation', token: 'alt-m' },
           { label: 'UTC', token: 'utc' },
-          { label: 'Note', token: 'message' },
         ],
+      },
+      {
+        kind: 'note',
+        font: 'mono',
+        ceiling: 30,
+        lineHeight: 1.4,
+        marginTop: 18,
+        labelSize: 13,
+        tracking: 0.2,
       },
     ],
     measurementRows: true,

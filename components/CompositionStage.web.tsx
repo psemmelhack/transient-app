@@ -346,15 +346,23 @@ function Footer({ node }: { node: FooterNode }) {
 
 function Message({ node }: { node: FooterNode }) {
   if (!node.message) return null;
+  const align = node.align === 'center' ? 'center' : node.align === 'right' && node.arrangement !== 'split' ? 'right' : 'left';
   return (
     <div
+      data-role="note"
+      data-note-copy
       style={{
         ...fontCss(node.message.font),
         fontSize: node.message.fontSize,
         lineHeight: node.message.lineHeight,
-        maxWidth: node.message.maxWidth,
+        width: node.message.maxWidth,
+        maxWidth: '100%',
         marginBottom: node.arrangement === 'split' ? 0 : node.message.marginBottom,
-        textAlign: node.align === 'right' && node.arrangement !== 'split' ? 'right' : node.align === 'center' ? 'center' : 'left',
+        marginLeft: align === 'center' || align === 'right' ? 'auto' : undefined,
+        marginRight: align === 'center' ? 'auto' : undefined,
+        textAlign: align,
+        whiteSpace: 'normal',
+        overflowWrap: 'break-word',
       }}
     >
       {node.message.text}
@@ -496,6 +504,65 @@ function QuietPiece({ block, align }: { block: QuietBlock; align: Align }) {
     return (
       <div style={{ display: 'flex', justifyContent: justify, width: '100%', marginTop: block.marginTop }}>
         <TelemetryTable block={block} />
+      </div>
+    );
+  }
+  if (block.kind === 'note') {
+    return (
+      <div data-role="note" style={{ width: '100%', marginTop: block.marginTop, textAlign: 'left' }}>
+        <div style={{ borderTop: `1px solid ${block.color}`, paddingTop: 10 }}>
+          <div
+            style={{
+              ...fontCss(block.labelFont),
+              fontSize: block.labelSize,
+              letterSpacing: `${block.tracking}em`,
+              lineHeight: 1.4,
+              textTransform: 'uppercase',
+            }}
+          >
+            {block.label}
+          </div>
+          <div
+            data-role="note-copy"
+            style={{
+              ...fontCss(block.font),
+              fontSize: block.fontSize,
+              lineHeight: block.lineHeight,
+              marginTop: 8,
+              width: block.maxWidth,
+              maxWidth: '100%',
+              whiteSpace: 'normal',
+              overflowWrap: 'break-word',
+              fontFeatureSettings: block.font.features,
+            }}
+          >
+            {block.text}
+          </div>
+        </div>
+      </div>
+    );
+  }
+  if (block.kind === 'text' && block.wrap) {
+    return (
+      <div
+        data-role="note"
+        data-note-copy
+        style={{
+          ...fontCss(block.font),
+          fontSize: block.fontSize,
+          lineHeight: block.lineHeight,
+          marginTop: block.marginTop,
+          opacity: block.opacity,
+          width: block.maxWidth ?? '100%',
+          maxWidth: '100%',
+          alignSelf: align === 'center' ? 'center' : align === 'right' ? 'flex-end' : 'flex-start',
+          textAlign: align,
+          whiteSpace: 'normal',
+          overflowWrap: 'break-word',
+          fontFeatureSettings: block.font.features,
+        }}
+      >
+        {block.text}
       </div>
     );
   }
