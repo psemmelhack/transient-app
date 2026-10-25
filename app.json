@@ -29,7 +29,6 @@
       "favicon": "./assets/favicon.png",
       "name": "Transient",
       "shortName": "Transient",
-      "description": "A place, a time, and a few words.",
       "themeColor": "#f3f0ea",
       "backgroundColor": "#f3f0ea",
       "display": "standalone",

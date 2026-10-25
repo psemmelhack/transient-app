@@ -1,7 +1,7 @@
 {
   "name": "Transient",
   "short_name": "Transient",
-  "description": "A place, a time, and a few words.",
+  "description": "Mark where and when you are.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
