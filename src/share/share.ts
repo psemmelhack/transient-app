@@ -31,16 +31,42 @@ export async function sharePng(blob: Blob, filename: string): Promise<'shared' |
   }
 }
 
+interface CaptureNavigator {
+  userAgent?: string;
+  userAgentData?: { platform?: string };
+}
+
 /**
- * Capture puts the image where a phone can add it to Photos.
- * When the browser can share a file, this opens the system sheet with that file alone.
- * A download happens only when file sharing is unavailable. Cancelling the sheet does not download.
+ * Android is `userAgentData.platform === 'Android'` when that string is present.
+ * An empty platform falls through to the user agent. iPhone and desktop platforms are not Android.
+ */
+export function isAndroidPlatform(nav?: CaptureNavigator): boolean {
+  const source: CaptureNavigator | undefined =
+    nav ?? (typeof navigator === 'undefined' ? undefined : (navigator as CaptureNavigator));
+  const platform = source?.userAgentData?.platform;
+  if (typeof platform === 'string' && platform.length > 0) return platform === 'Android';
+  return /Android/i.test(source?.userAgent ?? '');
+}
+
+export type CaptureDelivery = 'shared' | 'cancelled' | 'downloaded' | 'saved';
+
+/**
+ * Capture puts the image where a phone can keep it.
+ * Android downloads the PNG first, so it lands in Downloads and shows in Gallery, then opens the share sheet.
+ * iOS opens the sheet alone; Save Image lives there, and cancelling stores nothing.
+ * A desktop browser that cannot share a file downloads the PNG.
+ * On Android, dismissing the sheet still keeps the download (`saved`).
  */
 export async function saveImage(
   blob: Blob,
   filename: string,
   download: (blob: Blob, filename: string) => void,
-): Promise<'shared' | 'cancelled' | 'downloaded'> {
+): Promise<CaptureDelivery> {
+  if (isAndroidPlatform()) {
+    download(blob, filename);
+    const result = await sharePng(blob, filename);
+    return result === 'shared' ? 'shared' : 'saved';
+  }
   const result = await sharePng(blob, filename);
   if (result === 'shared' || result === 'cancelled') return result;
   if (canShareFiles()) throw new Error('Could not open the share sheet');

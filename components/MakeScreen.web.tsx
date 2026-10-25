@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { flushSync } from 'react-dom';
 import { buildScene } from '../src/composition/scene';
 import { captureStage } from '../src/export/capture';
-import { downloadBlob, fileNameFor } from '../src/export/download';
+import { captureFileName, downloadBlob } from '../src/export/download';
 import { saveImage } from '../src/share/share';
 import { insertPngText, metadataFor } from '../src/export/pngMeta';
 import { previewBox, PIN_HEADER } from '../src/layout/previewSize';
@@ -145,7 +145,7 @@ export function MakeScreen({ onMap, fixture = false }: { onMap: () => void; fixt
     try {
       const frozen = freeze(moment, telemetry.capture());
       const rendered = await renderPng(frozen);
-      const delivered = await saveImage(rendered.png, fileNameFor(frozen.at, frozen.latitude, frozen.longitude), downloadBlob);
+      const delivered = await saveImage(rendered.png, captureFileName(frozen.at, frozen.timezone), downloadBlob);
       if (delivered === 'cancelled') return;
       await saveTransient(
         makeRecord({
@@ -154,7 +154,7 @@ export function MakeScreen({ onMap, fixture = false }: { onMap: () => void; fixt
           message: note,
           scene: rendered.scene,
           png: rendered.png,
-          shares: sharesForCapture(sharedWith),
+          shares: sharesForCapture(delivered === 'saved' ? '' : sharedWith),
         }),
       );
       setSharedWith('');
