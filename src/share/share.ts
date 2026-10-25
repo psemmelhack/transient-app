@@ -52,7 +52,7 @@ export function isAndroidPlatform(nav?: CaptureNavigator): boolean {
   return /Android/i.test(source?.userAgent ?? '');
 }
 
-export type CaptureDelivery = 'shared' | 'cancelled' | 'downloaded' | 'saved' | 'opened';
+export type CaptureDelivery = 'shared' | 'cancelled' | 'downloaded' | 'saved' | 'opened' | 'downloads';
 
 /**
  * iPhone, iPad, and iPod, including iPadOS when the platform string is iOS.
@@ -77,12 +77,31 @@ export function isIosNonSafari(nav?: CaptureNavigator): boolean {
   return /FxiOS|CriOS|EdgiOS|OPiOS|DuckDuckGo|GSA\/|Focus\//i.test(source?.userAgent ?? '');
 }
 
+/** Firefox on iPhone. File sharing rejects there; a blob download saves into Files. */
+export function isFirefoxIos(nav?: CaptureNavigator): boolean {
+  if (!isIosPlatform(nav)) return false;
+  const source: CaptureNavigator | undefined =
+    nav ?? (typeof navigator === 'undefined' ? undefined : (navigator as CaptureNavigator));
+  return /FxiOS/i.test(source?.userAgent ?? '');
+}
+
+/** True when an anchor can carry a download name. Firefox iOS honors this for blob URLs. */
+export function anchorDownloadSupported(doc: Document | undefined = typeof document === 'undefined' ? undefined : document): boolean {
+  if (!doc) return false;
+  try {
+    const link = doc.createElement('a');
+    return typeof link.download === 'string';
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Capture puts the image where a phone can keep it.
  * Android downloads the PNG first, so it lands in Downloads and shows in Gallery, then opens the share sheet.
  * iOS Safari opens the sheet alone; Save Image lives there, and cancelling stores nothing.
- * When the file sheet is missing or rejects with anything other than a cancel, the PNG is still handed off:
- * iOS shows it for a long-press save, and every other browser downloads it.
+ * Firefox on iPhone downloads the PNG. The full-screen image is only used when that download cannot start.
+ * When another browser rejects the file sheet with anything other than a cancel, the PNG is still handed off.
  * On Android, dismissing the sheet still keeps the download (`saved`).
  */
 export async function saveImage(
@@ -91,6 +110,7 @@ export async function saveImage(
   download: (blob: Blob, filename: string) => void,
   present?: (blob: Blob, filename: string) => void,
 ): Promise<CaptureDelivery> {
+  if (isFirefoxIos()) return firefoxDownload(blob, filename, download, present);
   if (isAndroidPlatform()) {
     download(blob, filename);
     const result = await sharePng(blob, filename);
@@ -101,12 +121,40 @@ export async function saveImage(
   return handoffImage(blob, filename, download, present);
 }
 
+function firefoxDownload(
+  blob: Blob,
+  filename: string,
+  download: (blob: Blob, filename: string) => void,
+  present?: (blob: Blob, filename: string) => void,
+): CaptureDelivery {
+  if (anchorDownloadSupported()) {
+    download(blob, filename);
+    return 'downloads';
+  }
+  if (present) {
+    present(blob, filename);
+    return 'opened';
+  }
+  download(blob, filename);
+  return 'downloads';
+}
+
 function handoffImage(
   blob: Blob,
   filename: string,
   download: (blob: Blob, filename: string) => void,
   present?: (blob: Blob, filename: string) => void,
 ): CaptureDelivery {
+  if (isIosNonSafari()) {
+    if (anchorDownloadSupported()) {
+      download(blob, filename);
+      return 'downloads';
+    }
+    if (present) {
+      present(blob, filename);
+      return 'opened';
+    }
+  }
   if (isIosPlatform() && present) {
     present(blob, filename);
     return 'opened';

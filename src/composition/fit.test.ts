@@ -36,6 +36,20 @@ describe('fitLine', () => {
     expect(fitted.shiftLeft).toBeCloseTo(probe.actualBoundingBoxLeft * scale, 5);
   });
 
+  it('uses a fixed leading when vertical metrics are missing', () => {
+    const broken: ProbeMetrics = {
+      ...probe,
+      actualBoundingBoxAscent: 0,
+      actualBoundingBoxDescent: Number.NaN,
+      fontBoundingBoxAscent: Number.NaN,
+      fontBoundingBoxDescent: 0,
+    };
+    const fitted = fitLine(broken, 900, { leading: 0.92, trusted: false });
+    expect(fitted.height).toBeCloseTo(fitted.fontSize * 0.92, 5);
+    expect(fitted.shiftTop).toBe(0);
+    expect(fitted.shiftLeft).toBe(0);
+  });
+
   it('survives a zero ink measurement', () => {
     const empty: ProbeMetrics = {
       ...probe,

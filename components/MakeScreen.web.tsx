@@ -18,7 +18,7 @@ import { CompositionStage } from './CompositionStage';
 import { Icon } from './Icons';
 import { Parameters } from './Parameters';
 import { useStyle } from './StyleContext';
-import { captureLabel, capturedToast, sharedWithLabel } from '../src/ui/actions';
+import { captureLabel, capturedToast, savedToDownloads, sharedWithLabel } from '../src/ui/actions';
 import { ink, line, muted, paper, ui } from './theme';
 
 const NOTE_LIMIT = 200;
@@ -204,7 +204,7 @@ export function MakeScreen({ onMap, fixture = false }: { onMap: () => void; fixt
         }),
       );
       setSharedWith('');
-      setToast(capturedToast);
+      setToast(delivered === 'downloads' ? savedToDownloads : capturedToast);
     } catch {
       setToast(produced ? 'Couldn’t share the image' : 'Couldn’t make the image');
     } finally {
@@ -328,11 +328,11 @@ export function MakeScreen({ onMap, fixture = false }: { onMap: () => void; fixt
 
       {heldUrl && (
         <div role="dialog" aria-label="Captured image" style={heldStyle}>
+          <button type="button" aria-label="Close" onClick={dismissHeld} style={heldClose}>
+            <Icon name="close" size={20} color={ink} />
+          </button>
           <img src={heldUrl} alt="Captured transient" style={heldImg} />
           <p style={heldHint}>Long-press the image to save it</p>
-          <button type="button" onClick={dismissHeld} style={heldDone}>
-            Done
-          </button>
         </div>
       )}
     </div>
@@ -477,45 +477,47 @@ const heldStyle: CSSProperties = {
   background: paper,
   display: 'flex',
   flexDirection: 'column',
-  alignItems: 'center',
-  justifyContent: 'center',
-  gap: 16,
-  paddingTop: 'max(24px, env(safe-area-inset-top))',
-  paddingBottom: 'max(24px, env(safe-area-inset-bottom))',
-  paddingLeft: 'max(22px, env(safe-area-inset-left))',
-  paddingRight: 'max(22px, env(safe-area-inset-right))',
+  alignItems: 'stretch',
+  justifyContent: 'flex-start',
+  gap: 14,
+  paddingTop: 'max(12px, env(safe-area-inset-top))',
+  paddingBottom: 'max(18px, env(safe-area-inset-bottom))',
+  paddingLeft: 'max(18px, env(safe-area-inset-left))',
+  paddingRight: 'max(18px, env(safe-area-inset-right))',
   boxSizing: 'border-box',
 };
 
+const heldClose: CSSProperties = {
+  alignSelf: 'flex-end',
+  width: 44,
+  height: 44,
+  display: 'inline-flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  border: 'none',
+  background: 'transparent',
+  padding: 0,
+  cursor: 'pointer',
+  color: ink,
+};
+
 const heldImg: CSSProperties = {
-  maxWidth: '100%',
-  maxHeight: 'calc(100% - 96px)',
+  width: '100%',
+  height: 'auto',
+  maxHeight: 'calc(100% - 88px)',
   objectFit: 'contain',
-  boxShadow: '0 0 0 1px rgba(28,27,25,0.14)',
+  alignSelf: 'center',
   WebkitTouchCallout: 'default',
 };
 
 const heldHint: CSSProperties = {
   margin: 0,
+  textAlign: 'center',
   fontFamily: ui,
   fontWeight: 400,
   fontSize: 13,
   letterSpacing: '0.02em',
   color: muted,
-};
-
-const heldDone: CSSProperties = {
-  minWidth: 44,
-  minHeight: 44,
-  border: 'none',
-  background: 'transparent',
-  padding: '0 14px',
-  cursor: 'pointer',
-  fontFamily: ui,
-  fontWeight: 500,
-  fontSize: 14,
-  letterSpacing: '0.04em',
-  color: ink,
 };
 
 const toastStyle: CSSProperties = {

@@ -35,6 +35,11 @@ export interface PosterRecipe {
   nativeFormat: FormatId;
   nativeBox: Box;
   heroGap: number;
+  /**
+   * Line box as a fraction of the hero font size when bounding-box metrics are
+   * missing. Each poster sets the leading of its display face.
+   */
+  heroLeading: number;
   heroTokens: Token[];
   heroTop: number;
   kicker?: {
@@ -169,6 +174,7 @@ export const RECIPES: Record<string, Recipe> = {
     nativeFormat: 'feed',
     nativeBox: { left: 60, right: 60, top: 64, bottom: 64 },
     heroGap: 22,
+    heroLeading: 0.92,
     heroTokens: ['lat', 'lon', 'date-compact', 'time-zone', 'place-city-upper'],
     heroTop: 64,
     footer: {
@@ -193,6 +199,7 @@ export const RECIPES: Record<string, Recipe> = {
     nativeFormat: 'feed',
     nativeBox: { left: 64, right: 64, top: 130, bottom: 56 },
     heroGap: 26,
+    heroLeading: 0.9,
     heroTokens: ['lat', 'lon', 'date-compact', 'time-short'],
     heroTop: 130,
     kicker: {
@@ -226,6 +233,7 @@ export const RECIPES: Record<string, Recipe> = {
     nativeFormat: 'story',
     nativeBox: { left: 64, right: 64, top: 260, bottom: 270 },
     heroGap: 24,
+    heroLeading: 0.94,
     heroTokens: ['lat', 'lon', 'date-compact', 'time-short'],
     heroTop: 260,
     footer: {
@@ -249,6 +257,7 @@ export const RECIPES: Record<string, Recipe> = {
     nativeFormat: 'square',
     nativeBox: { left: 64, right: 64, top: 330, bottom: 56 },
     heroGap: 30,
+    heroLeading: 1.05,
     heroTokens: ['lat', 'lon-endash'],
     heroTop: 330,
     headerSplit: {
@@ -281,6 +290,7 @@ export const RECIPES: Record<string, Recipe> = {
     nativeFormat: 'feed',
     nativeBox: feedBox,
     heroGap: 20,
+    heroLeading: 0.96,
     heroTokens: ['lat', 'lon', 'date-compact', 'time-zone', 'place-city-upper'],
     heroTop: 64,
     kicker: {

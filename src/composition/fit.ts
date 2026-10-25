@@ -28,13 +28,45 @@ export interface FittedLine {
   shiftLeft: number;
 }
 
-export function fitLine(metrics: ProbeMetrics, targetWidth: number): FittedLine {
+export interface FitLineOptions {
+  /** Line box as a fraction of font size, used when vertical metrics cannot be trusted. */
+  leading?: number;
+  /**
+   * False when fontBoundingBox or actualBoundingBox was 0, NaN, or implausibly small.
+   * The line box is then font size times `leading`, with no vertical shift.
+   */
+  trusted?: boolean;
+}
+
+/** A vertical metric is usable only when it is finite and at least `floorRatio` of the probe. */
+export function verticalMetric(value: unknown, probe: number, floorRatio: number): number | null {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value < probe * floorRatio) return null;
+  return value;
+}
+
+/** Ascent boxes at 0, NaN, or a few pixels mean the face was not decoded. */
+export function verticalMetricsTrusted(metrics: ProbeMetrics): boolean {
   const probe = metrics.probeSize > 0 ? metrics.probeSize : 200;
+  return verticalMetric(metrics.actualBoundingBoxAscent, probe, 0.35) != null && verticalMetric(metrics.fontBoundingBoxAscent, probe, 0.45) != null;
+}
+
+export function fitLine(metrics: ProbeMetrics, targetWidth: number, options: FitLineOptions = {}): FittedLine {
+  const probe = metrics.probeSize > 0 ? metrics.probeSize : 200;
+  const leading = options.leading != null && Number.isFinite(options.leading) && options.leading > 0 ? options.leading : 0.92;
+  const trusted = options.trusted !== false;
   const advance = metrics.advanceWidth > 0 ? metrics.advanceWidth : metrics.domAdvanceWidth;
   const dom = metrics.domAdvanceWidth > 0 ? metrics.domAdvanceWidth : advance;
   const cr = advance > 0 ? dom / advance : 1;
   const ink = (metrics.actualBoundingBoxLeft + metrics.actualBoundingBoxRight) * cr;
   const fontSize = ink > 0.5 ? (probe * targetWidth) / ink : probe;
+  if (!trusted) {
+    return {
+      fontSize,
+      height: Math.max(1, fontSize * leading),
+      shiftTop: 0,
+      shiftLeft: 0,
+    };
+  }
   const k = fontSize / probe;
   const kx = k * cr;
   const inkA = metrics.actualBoundingBoxAscent * k;
@@ -43,11 +75,12 @@ export function fitLine(metrics: ProbeMetrics, targetWidth: number): FittedLine 
   const fD = metrics.fontBoundingBoxDescent * k;
   const half = (fontSize - (fA + fD)) / 2;
   const inkTop = half + fA - inkA;
+  const inkHeight = Number.isFinite(inkA + inkD) ? inkA + inkD : 0;
   return {
     fontSize,
-    height: Math.max(1, inkA + inkD),
-    shiftTop: -inkTop,
-    shiftLeft: metrics.actualBoundingBoxLeft * kx,
+    height: Math.max(1, inkHeight > 0 ? inkHeight : fontSize * leading),
+    shiftTop: Number.isFinite(inkTop) ? -inkTop : 0,
+    shiftLeft: Number.isFinite(metrics.actualBoundingBoxLeft * kx) ? metrics.actualBoundingBoxLeft * kx : 0,
   };
 }
 

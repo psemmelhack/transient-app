@@ -36,6 +36,8 @@ export interface FitStackNode {
   font: CssFont;
   lines: string[];
   align: Align;
+  /** Line box as a fraction of font size when canvas bounding boxes cannot be trusted. */
+  leading: number;
   /** Line count of the footer extras, so the hero refits when telemetry appears. */
   footerCue: string;
 }
@@ -347,6 +349,7 @@ function posterNodes(recipe: PosterRecipe, style: Style, moment: Moment, message
       font: fontOf(style, 'display'),
       lines,
       align: style.align,
+      leading: recipe.heroLeading ?? 0.92,
       footerCue: '',
     });
   }
