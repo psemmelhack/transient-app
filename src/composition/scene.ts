@@ -422,7 +422,10 @@ function posterNodes(recipe: PosterRecipe, style: Style, moment: Moment, message
   });
 
   if (recipe.absoluteMark) {
-    nodes.push(markNode(style, recipe.absoluteMark, native ? recipe.absoluteMark.bottom : Math.max(recipe.absoluteMark.bottom, format.inset.bottom * 0.4)));
+    const mark = markNode(style, recipe.absoluteMark, native ? recipe.absoluteMark.bottom : Math.max(recipe.absoluteMark.bottom, format.inset.bottom * 0.4));
+    mark.left = box.left;
+    mark.right = box.right;
+    nodes.push(mark);
   }
   return nodes;
 }
@@ -517,10 +520,8 @@ function quietNodes(recipe: QuietRecipe, style: Style, moment: Moment, message: 
   if (recipe.absoluteMark) {
     const markBottom = native ? recipe.absoluteMark.bottom : Math.max(recipe.absoluteMark.bottom, format.inset.bottom * 0.45);
     const mark = markNode(style, recipe.absoluteMark, markBottom);
-    if (recipe.markInset) {
-      mark.left = side;
-      mark.right = side;
-    }
+    mark.left = side;
+    mark.right = side;
     nodes.push(mark);
   }
   return nodes;

@@ -27,15 +27,31 @@ describe('preview box', () => {
     expect(box.pinHeight).toBeGreaterThan(600);
   });
 
-  it('gives a desktop feed one large card', () => {
+  it('caps a desktop card so the parameters have room under the pin', () => {
     const box = previewBox({
-      sceneWidth: FORMATS.feed.width,
-      sceneHeight: FORMATS.feed.height,
-      viewportWidth: 1280,
-      viewportHeight: 800,
+      sceneWidth: FORMATS.square.width,
+      sceneHeight: FORMATS.square.height,
+      viewportWidth: 1440,
+      viewportHeight: 900,
       dockHeight: 156,
     });
-    expect(box.height).toBeGreaterThan(480);
-    expect(800 - box.pinHeight).toBeGreaterThan(80);
+    expect(box.width).toBe(box.height);
+    expect(box.height).toBeGreaterThanOrEqual(280);
+    expect(box.height).toBeLessThanOrEqual(440);
+    expect(box.height / 900).toBeGreaterThanOrEqual(0.4);
+    expect(box.height / 900).toBeLessThanOrEqual(0.45);
+    expect(900 - box.pinHeight).toBeGreaterThan(360);
+  });
+
+  it('keeps a short desktop window from growing the card past the cap', () => {
+    const box = previewBox({
+      sceneWidth: FORMATS.square.width,
+      sceneHeight: FORMATS.square.height,
+      viewportWidth: 1280,
+      viewportHeight: 1400,
+      dockHeight: 156,
+    });
+    expect(box.height).toBeLessThanOrEqual(440);
+    expect(box.height).toBeGreaterThanOrEqual(280);
   });
 });
