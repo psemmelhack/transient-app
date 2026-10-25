@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { captureLabel, capturedToast, capturedToPhotos, capturedUnshared, capturePending, emptyLibrary } from './actions';
+import { captureLabel, capturedToast, capturedToPhotos, capturedUnshared, capturePending, emptyLibrary, sharedWithLabel } from './actions';
 
 describe('capture wording', () => {
   it('names the action Capture in the button, the toast, and the map', () => {
     expect(captureLabel).toBe('Capture');
+    expect(sharedWithLabel).toBe('Shared with (optional)');
     expect(capturedToast).toBe('Captured');
     expect(capturedUnshared).toBe('Captured · not shared');
     expect(capturedToPhotos).toBe('Captured to Photos');

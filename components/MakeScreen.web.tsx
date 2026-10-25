@@ -12,23 +12,16 @@ import { isTelemetryEnabled } from '../src/data/plugins';
 import type { Moment } from '../src/data/moment';
 import { sunPosition } from '../src/data/solar';
 import type { Scene } from '../src/composition/scene';
-import { makeRecord } from '../src/storage/record';
-import { saveTransient, type ShareEntry } from '../src/storage/library';
+import { makeRecord, sharesForCapture } from '../src/storage/record';
+import { saveTransient } from '../src/storage/library';
 import { CompositionStage } from './CompositionStage';
 import { Icon } from './Icons';
 import { Parameters } from './Parameters';
-import { ShareSheet } from './ShareSheet';
 import { useStyle } from './StyleContext';
-import { captureLabel, capturedToast } from '../src/ui/actions';
+import { captureLabel, capturedToast, sharedWithLabel } from '../src/ui/actions';
 import { ink, line, muted, paper, ui } from './theme';
 
 const NOTE_LIMIT = 200;
-
-interface PendingShare {
-  png: Blob;
-  moment: Moment;
-  scene: Scene;
-}
 
 export function MakeScreen({ onMap, fixture = false }: { onMap: () => void; fixture?: boolean }) {
   const { style, update, randomize, undo, canUndo } = useStyle();
@@ -36,6 +29,7 @@ export function MakeScreen({ onMap, fixture = false }: { onMap: () => void; fixt
   const telemetryOn = isTelemetryEnabled(style.measurements);
   const telemetry = useTelemetry(telemetryOn);
   const [note, setNote] = useState('');
+  const [sharedWith, setSharedWith] = useState('');
   const [lock, setLock] = useState<Moment | null>(null);
   const [atControls, setAtControls] = useState(false);
   const [viewport, setViewport] = useState({ width: 390, height: 800 });
@@ -44,7 +38,6 @@ export function MakeScreen({ onMap, fixture = false }: { onMap: () => void; fixt
   const [dimmed, setDimmed] = useState(false);
   const [working, setWorking] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
-  const [pending, setPending] = useState<PendingShare | null>(null);
   const scrollerRef = useRef<HTMLDivElement>(null);
   const pinRef = useRef<HTMLDivElement>(null);
   const dockRef = useRef<HTMLDivElement>(null);
@@ -154,50 +147,23 @@ export function MakeScreen({ onMap, fixture = false }: { onMap: () => void; fixt
       const rendered = await renderPng(frozen);
       const delivered = await saveImage(rendered.png, fileNameFor(frozen.at, frozen.latitude, frozen.longitude), downloadBlob);
       if (delivered === 'cancelled') return;
-      await saveTransient(makeRecord({ moment: frozen, style, message: note, scene: rendered.scene, png: rendered.png, shares: [] }));
+      await saveTransient(
+        makeRecord({
+          moment: frozen,
+          style,
+          message: note,
+          scene: rendered.scene,
+          png: rendered.png,
+          shares: sharesForCapture(sharedWith),
+        }),
+      );
+      setSharedWith('');
       setToast(capturedToast);
     } catch {
       setToast('Couldn’t make the image');
     } finally {
       setLock(null);
       setWorking(false);
-    }
-  }
-
-  async function onShare() {
-    if (!moment || working) return;
-    setWorking(true);
-    try {
-      const frozen = freeze(moment, telemetry.capture());
-      const rendered = await renderPng(frozen);
-      setPending({ png: rendered.png, moment: frozen, scene: rendered.scene });
-    } catch {
-      setLock(null);
-      setToast('Couldn’t make the image');
-    } finally {
-      setWorking(false);
-    }
-  }
-
-  async function onShared(entry: ShareEntry, delivered: 'shared' | 'downloaded') {
-    if (!pending) return;
-    try {
-      await saveTransient(
-        makeRecord({
-          moment: pending.moment,
-          style,
-          message: note,
-          scene: pending.scene,
-          png: pending.png,
-          shares: [entry],
-        }),
-      );
-      setToast(delivered === 'downloaded' ? 'Downloaded' : 'Shared');
-    } catch {
-      setToast('Couldn’t keep the record');
-    } finally {
-      setPending(null);
-      setLock(null);
     }
   }
 
@@ -259,19 +225,22 @@ export function MakeScreen({ onMap, fixture = false }: { onMap: () => void; fixt
               style={noteStyle}
             />
           </label>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 4 }}>
+          <input
+            value={sharedWith}
+            onChange={(event) => setSharedWith(event.target.value)}
+            placeholder={sharedWithLabel}
+            aria-label={sharedWithLabel}
+            autoComplete="off"
+            enterKeyHint="done"
+            style={sharedStyle}
+          />
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 2 }}>
             <span style={{ fontFamily: ui, fontWeight: 400, fontSize: 12, letterSpacing: '0.04em', color: note.length > 180 ? ink : muted }}>
               {note.length} / {NOTE_LIMIT}
             </span>
-            <div style={{ display: 'flex', alignItems: 'center', flex: 'none' }}>
-              <button type="button" aria-label={captureLabel} disabled={!moment || working} onClick={onSave} style={textAction(!moment || working)}>
-                {captureLabel}
-              </button>
-              <span aria-hidden style={{ width: 1, height: 14, background: line, flex: 'none' }} />
-              <button type="button" aria-label="Share" disabled={!moment || working} onClick={onShare} style={textAction(!moment || working)}>
-                Share
-              </button>
-            </div>
+            <button type="button" aria-label={captureLabel} disabled={!moment || working} onClick={onSave} style={textAction(!moment || working)}>
+              {captureLabel}
+            </button>
           </div>
           {sample && (
             <p style={sampleStyle}>
@@ -291,19 +260,6 @@ export function MakeScreen({ onMap, fixture = false }: { onMap: () => void; fixt
         </div>
       </div>
 
-      {pending && (
-        <ShareSheet
-          png={pending.png}
-          capturedAt={pending.moment.at}
-          latitude={pending.moment.latitude}
-          longitude={pending.moment.longitude}
-          onClose={() => {
-            setPending(null);
-            setLock(null);
-          }}
-          onComplete={onShared}
-        />
-      )}
       {toast && (
         <div role="status" style={toastStyle}>
           {toast}
@@ -393,6 +349,20 @@ const dockStyle: CSSProperties = {
   boxSizing: 'border-box',
 };
 
+const sharedStyle: CSSProperties = {
+  width: '100%',
+  marginTop: 8,
+  border: 'none',
+  background: 'transparent',
+  fontFamily: ui,
+  fontWeight: 400,
+  fontSize: 13,
+  lineHeight: 1.4,
+  color: ink,
+  padding: '4px 0',
+  outline: 'none',
+};
+
 const noteStyle: CSSProperties = {
   width: '100%',
   resize: 'none',
@@ -448,7 +418,7 @@ const toastStyle: CSSProperties = {
 
 const chromeCss = `
   button, input, textarea { font: inherit; color: inherit; box-sizing: border-box; max-width: 100%; }
-  textarea::placeholder { color: ${muted}; }
+  textarea::placeholder, input::placeholder { color: ${muted}; }
   .h-scroll { scrollbar-width: none; overscroll-behavior-x: contain; -webkit-overflow-scrolling: touch; }
   .h-scroll::-webkit-scrollbar { display: none; }
   .h-fade { position: absolute; top: 0; bottom: 4px; width: 28px; pointer-events: none; }
