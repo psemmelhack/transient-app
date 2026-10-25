@@ -21,7 +21,7 @@
       "permissions": ["ACCESS_COARSE_LOCATION", "ACCESS_FINE_LOCATION"]
     },
     "experiments": {
-      "baseUrl": "/transient-app"
+      "baseUrl": ""
     },
     "web": {
       "bundler": "metro",
@@ -33,7 +33,7 @@
       "themeColor": "#f3f0ea",
       "backgroundColor": "#f3f0ea",
       "display": "standalone",
-      "startUrl": "/transient-app/",
+      "startUrl": "/",
       "lang": "en"
     },
     "plugins": [
