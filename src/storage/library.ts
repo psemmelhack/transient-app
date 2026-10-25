@@ -38,6 +38,10 @@ export interface TransientRecord {
   locationSource: 'device' | 'example';
 }
 
+/** IndexedDB database and object store. The migrate page reads these names. */
+export const TRANSIENT_DB = 'transient';
+export const TRANSIENT_STORE = 'transients';
+
 const memory: TransientRecord[] = [];
 
 function hasIdb(): boolean {
@@ -48,9 +52,9 @@ let dbPromise: Promise<IDBPDatabase> | null = null;
 
 function db(): Promise<IDBPDatabase> {
   if (!dbPromise) {
-    dbPromise = openDB('transient', 1, {
+    dbPromise = openDB(TRANSIENT_DB, 1, {
       upgrade(database) {
-        const store = database.createObjectStore('transients', { keyPath: 'id' });
+        const store = database.createObjectStore(TRANSIENT_STORE, { keyPath: 'id' });
         store.createIndex('by-time', 'capturedAt');
       },
     });
@@ -62,7 +66,7 @@ export async function listTransients(): Promise<TransientRecord[]> {
   if (!hasIdb()) {
     return [...memory].sort((a, b) => (a.capturedAt < b.capturedAt ? 1 : -1));
   }
-  const all = await (await db()).getAll('transients');
+  const all = await (await db()).getAll(TRANSIENT_STORE);
   return (all as TransientRecord[]).sort((a, b) => (a.capturedAt < b.capturedAt ? 1 : -1));
 }
 
@@ -71,7 +75,7 @@ export async function saveTransient(record: TransientRecord): Promise<void> {
     memory.unshift(record);
     return;
   }
-  await (await db()).put('transients', record);
+  await (await db()).put(TRANSIENT_STORE, record);
 }
 
 export async function deleteTransient(id: string): Promise<void> {
@@ -80,5 +84,5 @@ export async function deleteTransient(id: string): Promise<void> {
     if (index >= 0) memory.splice(index, 1);
     return;
   }
-  await (await db()).delete('transients', id);
+  await (await db()).delete(TRANSIENT_STORE, id);
 }

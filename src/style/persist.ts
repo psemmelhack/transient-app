@@ -6,7 +6,7 @@ import { defaultMeasurements } from '../data/plugins';
 import { defaultStyle } from './presets';
 import type { Align, BackgroundMode, LayoutMode, Style, TempUnit } from './types';
 
-const KEY = 'transient.style.v1';
+export const STYLE_KEY = 'transient.style.v1';
 
 function isAlign(value: unknown): value is Align {
   return value === 'left' || value === 'center' || value === 'right';
@@ -57,10 +57,19 @@ export function sanitizeStyle(input: unknown): Style {
   };
 }
 
+export function hasSavedStyle(): boolean {
+  try {
+    if (typeof localStorage === 'undefined') return false;
+    return localStorage.getItem(STYLE_KEY) != null;
+  } catch {
+    return true;
+  }
+}
+
 export function loadStyle(): Style {
   try {
     if (typeof localStorage === 'undefined') return defaultStyle();
-    const raw = localStorage.getItem(KEY);
+    const raw = localStorage.getItem(STYLE_KEY);
     if (!raw) return defaultStyle();
     return sanitizeStyle(JSON.parse(raw));
   } catch {
@@ -71,7 +80,7 @@ export function loadStyle(): Style {
 export function saveStyle(style: Style): void {
   try {
     if (typeof localStorage === 'undefined') return;
-    localStorage.setItem(KEY, JSON.stringify(style));
+    localStorage.setItem(STYLE_KEY, JSON.stringify(style));
   } catch {
     /* private mode and full disks should not break the maker */
   }
