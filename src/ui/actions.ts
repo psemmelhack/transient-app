@@ -2,6 +2,7 @@
 export const captureLabel = 'Capture';
 export const sharedWithLabel = 'Shared with (optional)';
 export const capturedToast = 'Captured';
+export const savedToDownloads = 'Saved to Downloads';
 export const capturedUnshared = 'Captured · not shared';
 export const capturedToPhotos = 'Captured to Photos';
 export const capturePending = 'Capturing the image runs in the browser.';

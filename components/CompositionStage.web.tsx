@@ -1,7 +1,9 @@
 import { forwardRef, memo, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import type { CssFont } from '../src/composition/fonts';
 import { fontCss } from '../src/composition/fonts';
-import { fitLine, type ProbeMetrics } from '../src/composition/fit';
+import { fitLine, verticalMetricsTrusted, type ProbeMetrics } from '../src/composition/fit';
+import { cssFontShorthand, ensureFonts } from '../src/composition/fontReady';
+import { heroScaleToClear, scaleClearanceBox } from '../src/composition/heroClearance';
 import { noteRhythm, wrapNote } from '../src/composition/note';
 import { beginFit, endFit } from '../src/composition/fitSession';
 import type {
@@ -116,13 +118,15 @@ function NodeView({ node }: { node: SceneNode }) {
 }
 
 interface RowFit {
+  text: string;
   fontSize: number;
   height: number;
-  html: string;
+  shiftTop: number;
+  shiftLeft: number;
 }
 
 function fitSignature(node: FitStackNode): string {
-  return `${node.lines.join('\n')}|${node.font.family}|${node.font.weight}|${node.font.style}|${node.font.variation ?? ''}|${node.gap}|${node.left}|${node.right}|${node.top}|${node.color}|${node.align}|${node.footerCue}`;
+  return `${node.lines.join('\n')}|${node.font.family}|${node.font.weight}|${node.font.style}|${node.font.variation ?? ''}|${node.gap}|${node.leading}|${node.left}|${node.right}|${node.top}|${node.color}|${node.align}|${node.footerCue}`;
 }
 
 const FitStack = memo(
@@ -130,7 +134,7 @@ const FitStack = memo(
     const ref = useRef<HTMLDivElement>(null);
     const signature = fitSignature(node);
     const [rows, setRows] = useState<RowFit[]>([]);
-    const [stackScale, setStackScale] = useState<{ scale: number; origin: string }>({ scale: 1, origin: 'top left' });
+    const [gap, setGap] = useState(node.gap);
 
     useLayoutEffect(() => {
       const root = ref.current;
@@ -139,7 +143,7 @@ const FitStack = memo(
       beginFit();
       (async () => {
         try {
-          await document.fonts.ready;
+          await ensureFonts([cssFontShorthand(node.font, 200), cssFontShorthand(node.font, 96)]);
           if (cancelled || !ref.current) return;
           const live = ref.current;
           const width = live.clientWidth || 1;
@@ -149,14 +153,19 @@ const FitStack = memo(
             if (cancelled) return;
             const row = slots[index];
             if (!row) return;
-            next.push(await fitRow(row, node.lines[index], width, node.font));
+            next.push(await fitRow(row, node.lines[index], width, node.font, node.leading));
           }
+          if (cancelled || !ref.current) return;
+          const host = ref.current;
+          applyRows(host, next, node.gap);
+          const footer = host.closest('[data-stage]')?.querySelector<HTMLElement>('[data-role="footer"]') ?? null;
+          const scale = footer ? heroScaleToClear(host.offsetTop, host.offsetHeight, footer.offsetTop) : 1;
+          const fitted = next.map((row) => scaleClearanceBox(row, scale));
+          const fittedGap = scale < 0.999 ? node.gap * scale : node.gap;
+          applyRows(host, fitted, fittedGap);
           if (cancelled) return;
-          const scaled = scaleAgainstFooter(live, node.align);
-          live.style.transform = scaled.scale === 1 ? '' : `scale(${scaled.scale})`;
-          live.style.transformOrigin = scaled.origin;
-          setRows(next);
-          setStackScale(scaled);
+          setRows(fitted);
+          setGap(fittedGap);
         } finally {
           endFit();
         }
@@ -164,7 +173,7 @@ const FitStack = memo(
       return () => {
         cancelled = true;
       };
-    }, [signature, node.align, node.lines, node.font]);
+    }, [signature, node.align, node.lines, node.font, node.leading, node.gap]);
 
     return (
       <div
@@ -178,10 +187,8 @@ const FitStack = memo(
           top: node.top,
           display: 'flex',
           flexDirection: 'column',
-          gap: node.gap,
+          gap,
           color: node.color,
-          transform: stackScale.scale === 1 ? undefined : `scale(${stackScale.scale})`,
-          transformOrigin: stackScale.origin,
           ...fontCss(node.font),
         }}
       >
@@ -198,8 +205,20 @@ const FitStack = memo(
                 fontSize: fit?.fontSize,
                 height: fit?.height,
               }}
-              dangerouslySetInnerHTML={{ __html: fit?.html ?? '' }}
-            />
+            >
+              <span
+                style={{
+                  position: 'relative',
+                  display: 'block',
+                  whiteSpace: 'nowrap',
+                  lineHeight: 1,
+                  top: fit?.shiftTop ?? 0,
+                  left: fit?.shiftLeft ?? 0,
+                }}
+              >
+                {line}
+              </span>
+            </div>
           );
         })}
       </div>
@@ -210,62 +229,70 @@ const FitStack = memo(
 
 let measureCanvas: HTMLCanvasElement | null = null;
 
-function canvasFont(font: CssFont, size: number): string {
-  const family = font.family.includes(' ') ? `"${font.family}"` : font.family;
-  return `${font.style} ${font.weight} ${size}px ${family}`;
+function applyRows(root: HTMLElement, rows: RowFit[], gap: number) {
+  root.style.gap = `${gap}px`;
+  root.style.transform = 'none';
+  const slots = root.querySelectorAll<HTMLElement>('[data-fit]');
+  rows.forEach((row, index) => {
+    const el = slots[index];
+    if (!el) return;
+    el.style.fontSize = `${row.fontSize}px`;
+    el.style.height = `${row.height}px`;
+    el.style.lineHeight = '1';
+    el.style.overflow = 'hidden';
+    const span = el.firstElementChild;
+    if (span instanceof HTMLElement) {
+      span.style.top = `${row.shiftTop}px`;
+      span.style.left = `${row.shiftLeft}px`;
+    }
+  });
 }
 
-async function fitRow(row: HTMLElement, text: string, targetWidth: number, font: CssFont): Promise<RowFit> {
+async function fitRow(row: HTMLElement, text: string, targetWidth: number, font: CssFont, leading: number): Promise<RowFit> {
   const probe = 200;
-  const spec = canvasFont(font, probe);
-  try {
-    await document.fonts.load(spec, text);
-  } catch {
-    /* measurement still runs with whatever face is ready */
-  }
+  const spec = cssFontShorthand(font, probe);
+  await ensureFonts([spec]);
   if (!measureCanvas) measureCanvas = document.createElement('canvas');
   const ctx = measureCanvas.getContext('2d');
-  if (!ctx) return { fontSize: probe, height: probe, html: escapeHtml(text) };
+  const fallback: RowFit = { text, fontSize: probe, height: Math.max(1, probe * leading), shiftTop: 0, shiftLeft: 0 };
+  if (!ctx) return fallback;
   row.style.fontSize = `${probe}px`;
   row.style.lineHeight = '1';
-  row.innerHTML = `<span style="display:inline-block;white-space:nowrap;line-height:1">${escapeHtml(text)}</span>`;
-  const span = row.firstElementChild as HTMLElement | null;
+  row.style.height = 'auto';
+  const span = row.firstElementChild instanceof HTMLElement ? row.firstElementChild : null;
+  if (span) {
+    span.style.display = 'inline-block';
+    span.style.top = '0px';
+    span.style.left = '0px';
+    span.textContent = text;
+  }
   const domW = span?.offsetWidth || 1;
   ctx.font = spec;
   const measured = ctx.measureText(text);
+  const advance = measured.width || domW;
+  let left = finiteBox(measured.actualBoundingBoxLeft);
+  let right = finiteBox(measured.actualBoundingBoxRight);
+  if (left + right < 1) {
+    left = 0;
+    right = advance;
+  }
   const metrics: ProbeMetrics = {
     probeSize: probe,
-    advanceWidth: measured.width || domW,
+    advanceWidth: advance,
     domAdvanceWidth: domW,
-    actualBoundingBoxLeft: measured.actualBoundingBoxLeft || 0,
-    actualBoundingBoxRight: measured.actualBoundingBoxRight || measured.width || domW,
-    actualBoundingBoxAscent: measured.actualBoundingBoxAscent || probe * 0.72,
-    actualBoundingBoxDescent: measured.actualBoundingBoxDescent || probe * 0.12,
-    fontBoundingBoxAscent: measured.fontBoundingBoxAscent || probe * 0.8,
-    fontBoundingBoxDescent: measured.fontBoundingBoxDescent || probe * 0.2,
+    actualBoundingBoxLeft: left,
+    actualBoundingBoxRight: right,
+    actualBoundingBoxAscent: finiteBox(measured.actualBoundingBoxAscent),
+    actualBoundingBoxDescent: finiteBox(measured.actualBoundingBoxDescent),
+    fontBoundingBoxAscent: finiteBox(measured.fontBoundingBoxAscent),
+    fontBoundingBoxDescent: finiteBox(measured.fontBoundingBoxDescent),
   };
-  if (metrics.actualBoundingBoxLeft + metrics.actualBoundingBoxRight < 1) {
-    metrics.actualBoundingBoxLeft = 0;
-    metrics.actualBoundingBoxRight = metrics.advanceWidth || domW;
-  }
-  const fitted = fitLine(metrics, targetWidth);
-  const html = `<span style="position:relative;display:block;white-space:nowrap;line-height:1;top:${fitted.shiftTop}px;left:${fitted.shiftLeft}px">${escapeHtml(text)}</span>`;
-  row.style.fontSize = `${fitted.fontSize}px`;
-  row.style.height = `${fitted.height}px`;
-  row.style.overflow = 'hidden';
-  row.innerHTML = html;
-  return { fontSize: fitted.fontSize, height: fitted.height, html };
+  const fitted = fitLine(metrics, targetWidth, { leading, trusted: verticalMetricsTrusted(metrics) });
+  return { text, fontSize: fitted.fontSize, height: fitted.height, shiftTop: fitted.shiftTop, shiftLeft: fitted.shiftLeft };
 }
 
-function scaleAgainstFooter(root: HTMLElement, align: Align): { scale: number; origin: string } {
-  const origin = align === 'center' ? 'top center' : align === 'right' ? 'top right' : 'top left';
-  const stage = root.closest('[data-stage]') as HTMLElement | null;
-  const footer = stage?.querySelector('[data-role="footer"]') as HTMLElement | null;
-  if (!footer) return { scale: 1, origin };
-  const natural = root.offsetHeight;
-  const available = footer.offsetTop - 36 - root.offsetTop;
-  if (available > 48 && natural > available) return { scale: available / natural, origin };
-  return { scale: 1, origin };
+function finiteBox(value: number | undefined): number {
+  return typeof value === 'number' && Number.isFinite(value) ? value : 0;
 }
 
 function Footer({ node }: { node: FooterNode }) {
@@ -273,7 +300,7 @@ function Footer({ node }: { node: FooterNode }) {
   const metaStyle = {
     ...fontCss(node.metaFont),
     fontSize: node.metaSize,
-    lineHeight: node.metaLineHeight,
+    lineHeight: safeLeading(node.metaLineHeight, 1.45),
     opacity: node.metaOpacity,
     letterSpacing: node.metaTracking ? `${node.metaTracking}em` : undefined,
   } as const;
@@ -355,7 +382,7 @@ function Message({ node }: { node: FooterNode }) {
       style={{
         ...fontCss(node.message.font),
         fontSize: node.message.fontSize,
-        lineHeight: node.message.lineHeight,
+        lineHeight: safeLeading(node.message.lineHeight, 1.4),
         width: node.message.maxWidth,
         maxWidth: '100%',
         marginBottom: node.arrangement === 'split' ? 0 : node.message.marginBottom,
@@ -379,22 +406,35 @@ function Quiet({ node }: { node: QuietNode }) {
     const root = ref.current;
     const inner = innerRef.current;
     if (!root || !inner) return;
-    const available = root.clientHeight;
-    const natural = inner.offsetHeight;
-    const origin =
-      node.anchor === 'end'
-        ? node.align === 'right'
-          ? 'bottom right'
-          : node.align === 'center'
-            ? 'bottom center'
-            : 'bottom left'
-        : node.align === 'right'
-          ? 'center right'
-          : node.align === 'center'
-            ? 'center center'
-            : 'center left';
-    const scale = available > 0 && natural > available ? available / natural : 1;
-    setFit((prev) => (prev.scale === scale && prev.origin === origin ? prev : { scale, origin }));
+    let cancelled = false;
+    beginFit();
+    (async () => {
+      try {
+        await ensureFonts(quietFontSpecs(node));
+        if (cancelled || !ref.current || !innerRef.current) return;
+        const available = ref.current.clientHeight;
+        const natural = innerRef.current.offsetHeight;
+        const origin =
+          node.anchor === 'end'
+            ? node.align === 'right'
+              ? 'bottom right'
+              : node.align === 'center'
+                ? 'bottom center'
+                : 'bottom left'
+            : node.align === 'right'
+              ? 'center right'
+              : node.align === 'center'
+                ? 'center center'
+                : 'center left';
+        const scale = available > 0 && natural > available ? available / natural : 1;
+        setFit((prev) => (prev.scale === scale && prev.origin === origin ? prev : { scale, origin }));
+      } finally {
+        endFit();
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, [signature, node.anchor, node.align]);
 
   return (
@@ -434,6 +474,39 @@ function Quiet({ node }: { node: QuietNode }) {
   );
 }
 
+function safeLeading(value: number, fallback = 1.2): number {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) return fallback;
+  return value;
+}
+
+function quietFontSpecs(node: QuietNode): string[] {
+  const specs: string[] = [];
+  const add = (font: CssFont | undefined, size: number) => {
+    if (!font) return;
+    specs.push(cssFontShorthand(font, size));
+  };
+  for (const block of node.blocks) {
+    if (block.kind === 'rule') continue;
+    if (block.kind === 'rich-time') {
+      add(block.font, block.fontSize);
+      add(block.italicFont, block.fontSize);
+      continue;
+    }
+    if (block.kind === 'rows') {
+      add(block.labelFont, block.labelSize);
+      add(block.valueFont, block.valueSize);
+      continue;
+    }
+    if (block.kind === 'note') {
+      add(block.font, block.fontSize);
+      add(block.labelFont, block.labelSize);
+      continue;
+    }
+    if ('font' in block && 'fontSize' in block) add(block.font, block.fontSize);
+  }
+  return specs;
+}
+
 function QuietPiece({ block, align }: { block: QuietBlock; align: Align }) {
   if (block.kind === 'rule') {
     return (
@@ -451,7 +524,7 @@ function QuietPiece({ block, align }: { block: QuietBlock; align: Align }) {
   }
   if (block.kind === 'coords') {
     return (
-      <ShrinkText font={block.font} fontSize={block.fontSize} lineHeight={block.lineHeight} tracking={block.tracking} marginTop={block.marginTop}>
+      <ShrinkText font={block.font} fontSize={block.fontSize} lineHeight={safeLeading(block.lineHeight, 1.15)} tracking={block.tracking} marginTop={block.marginTop}>
         {block.lines.map((line) => (
           <div key={`${line.value}${line.suffix ?? ''}`}>
             {line.value}
@@ -470,7 +543,7 @@ function QuietPiece({ block, align }: { block: QuietBlock; align: Align }) {
         style={{
           ...fontCss(block.font),
           fontSize: block.fontSize,
-          lineHeight: block.lineHeight,
+          lineHeight: safeLeading(block.lineHeight, 1.2),
           marginTop: block.marginTop,
         }}
       >
@@ -486,7 +559,7 @@ function QuietPiece({ block, align }: { block: QuietBlock; align: Align }) {
         style={{
           ...fontCss(block.font),
           fontSize: block.fontSize,
-          lineHeight: block.lineHeight,
+          lineHeight: safeLeading(block.lineHeight, 1.45),
           marginTop: block.marginTop,
           opacity: block.opacity,
           letterSpacing: block.tracking ? `${block.tracking}em` : undefined,
@@ -526,7 +599,7 @@ function QuietPiece({ block, align }: { block: QuietBlock; align: Align }) {
             style={{
               ...fontCss(block.font),
               fontSize: block.fontSize,
-              lineHeight: block.lineHeight,
+              lineHeight: safeLeading(block.lineHeight),
               marginTop: 8,
               width: block.maxWidth,
               maxWidth: '100%',
@@ -547,7 +620,7 @@ function QuietPiece({ block, align }: { block: QuietBlock; align: Align }) {
         style={{
           ...fontCss(block.font),
           fontSize: block.fontSize,
-          lineHeight: block.lineHeight,
+          lineHeight: safeLeading(block.lineHeight),
           marginTop: block.marginTop,
           opacity: block.opacity,
           width: block.maxWidth ?? '100%',
@@ -581,7 +654,7 @@ function QuietPiece({ block, align }: { block: QuietBlock; align: Align }) {
               style={{
                 ...fontCss(block.labelFont),
                 fontSize: block.labelSize,
-                lineHeight: block.lineHeight,
+                lineHeight: safeLeading(block.lineHeight),
                 letterSpacing: `${block.tracking}em`,
                 textTransform: 'uppercase',
                 flex: 'none',
@@ -593,7 +666,7 @@ function QuietPiece({ block, align }: { block: QuietBlock; align: Align }) {
               style={{
                 ...fontCss(block.valueFont),
                 fontSize: block.valueSize,
-                lineHeight: block.lineHeight,
+                lineHeight: safeLeading(block.lineHeight),
                 textAlign: 'right',
                 whiteSpace: 'pre',
                 fontFeatureSettings: block.tabular ? '"tnum" 1' : block.valueFont.features,
@@ -628,7 +701,7 @@ function TelemetryTable({ block, color }: { block: { lines: { id: string; label:
       style={{
         ...fontCss(block.font),
         fontSize: block.fontSize,
-        lineHeight: block.lineHeight,
+        lineHeight: safeLeading(block.lineHeight),
         opacity: block.opacity,
         color,
         fontFeatureSettings: '"tnum" 1',
@@ -812,8 +885,4 @@ function Placeholder({ node }: { node: PlaceholderNode }) {
       {node.sub && <div style={{ ...fontCss(node.subFont), fontSize: 16, opacity: 0.7 }}>{node.sub}</div>}
     </div>
   );
-}
-
-function escapeHtml(text: string): string {
-  return text.replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[ch] ?? ch);
 }
