@@ -4,6 +4,7 @@ import { omitSupersededAccuracy, telemetryLines, type TelemetryLine } from '../d
 import type { Style } from '../style/types';
 import { FORMATS } from './formats';
 import { getFont, resolveFont, type CssFont, type FontRole } from './fonts';
+import { layoutPosterNote, noteFace, noteFontSize, noteMaxWidth, noteRhythm, NOTE_LEADING, wrappedLineCount } from './note';
 import { getRecipe, type PosterRecipe, type QuietBlockSpec, type QuietRecipe } from './recipes';
 import { clockLabel, coordLines, linesFor, MARK, momentText, renderToken, type CoordLineModel } from './text';
 
@@ -99,6 +100,22 @@ export type QuietBlock =
       marginTop: number;
       opacity?: number;
       maxWidth?: number;
+      /** A note wraps to its measure. Other lines may still shrink onto one line. */
+      wrap?: boolean;
+    }
+  | {
+      kind: 'note';
+      label: string;
+      text: string;
+      font: CssFont;
+      fontSize: number;
+      lineHeight: number;
+      labelFont: CssFont;
+      labelSize: number;
+      tracking: number;
+      marginTop: number;
+      maxWidth: number;
+      color: string;
     }
   | {
       kind: 'coords';
@@ -339,17 +356,30 @@ function posterNodes(recipe: PosterRecipe, style: Style, moment: Moment, message
   const metaLines = linesFor(recipe.footer.metaTokens, moment, message, recipe.footer.metaJoin);
   const extra = extras(style, moment);
   const telemetry = telemetryBlock(telemetryFor(style, moment), Math.min(16, recipe.footer.metaSize), 1.45, recipe.footer.metaOpacity);
+  const messageText = renderToken('message', moment, message)?.trim() || null;
   const hero = nodes.find((node) => node.kind === 'fit-stack');
   if (hero && hero.kind === 'fit-stack') {
-    hero.footerCue = `${extra.length}:${telemetry?.lines.map((line) => line.id).join(',') ?? ''}`;
+    hero.footerCue = `${extra.length}:${telemetry?.lines.map((line) => line.id).join(',') ?? ''}:${messageText?.length ?? 0}`;
   }
-  const messageText = renderToken('message', moment, message);
   const splitLeft = recipe.footer.splitLeft
     ? renderToken(recipe.footer.splitLeft, moment, message) ?? undefined
     : undefined;
   const splitRight = recipe.footer.splitRight
     ? renderToken(recipe.footer.splitRight, moment, message) ?? undefined
     : undefined;
+  const contentWidth = format.width - box.left - box.right;
+  const noteFont = noteFace(style.displayFontId, style.monoFontId, recipe.footer.messageFont);
+  const posterNote = messageText
+    ? layoutPosterNote({
+        text: messageText,
+        ceiling: recipe.footer.messageSize,
+        contentWidth,
+        rhythm: noteRhythm(noteFont.family),
+        arrangement,
+        splitWidth: recipe.footer.messageMaxWidth,
+        marginBottom: recipe.footer.messageMargin,
+      })
+    : null;
 
   nodes.push({
     kind: 'footer',
@@ -357,16 +387,16 @@ function posterNodes(recipe: PosterRecipe, style: Style, moment: Moment, message
     right: box.right,
     bottom: native ? recipe.nativeBox.bottom : box.bottom,
     align: style.align,
-    arrangement,
+    arrangement: posterNote?.arrangement ?? arrangement,
     color: footerColor,
-    message: messageText
+    message: messageText && posterNote
       ? {
           text: messageText,
-          font: fontOf(style, recipe.footer.messageFont),
-          fontSize: recipe.footer.messageSize,
-          lineHeight: recipe.footer.messageLineHeight,
-          maxWidth: recipe.footer.messageMaxWidth,
-          marginBottom: recipe.footer.messageMargin,
+          font: noteFont,
+          fontSize: posterNote.fontSize,
+          lineHeight: posterNote.lineHeight,
+          maxWidth: posterNote.maxWidth,
+          marginBottom: posterNote.marginBottom,
         }
       : undefined,
     metaLines,
@@ -411,13 +441,12 @@ function quietNodes(recipe: QuietRecipe, style: Style, moment: Moment, message: 
   const side = native ? recipe.side : Math.max(recipe.side, format.inset.left);
   const anchor: 'center' | 'end' =
     recipe.anchor === 'align' ? (style.align === 'center' ? 'center' : 'end') : recipe.anchor;
-  const top = native ? recipe.top : Math.max(recipe.top, anchor === 'center' ? 0 : format.inset.top);
-  const bottom = native
-    ? recipe.bottom
-    : Math.max(recipe.bottom, format.inset.bottom);
+  let top = native ? recipe.top : Math.max(recipe.top, anchor === 'center' ? 0 : format.inset.top);
+  let bottom = native ? recipe.bottom : Math.max(recipe.bottom, format.inset.bottom);
+  const contentWidth = format.width - side * 2;
   const blocks: QuietBlock[] = [];
   for (const spec of recipe.blocks) {
-    const block = quietBlock(spec, style, moment, message);
+    const block = quietBlock(spec, style, moment, message, contentWidth);
     if (block) blocks.push(block);
   }
   const readings = measured(style, moment);
@@ -458,6 +487,20 @@ function quietNodes(recipe: QuietRecipe, style: Style, moment: Moment, message: 
       }
     }
   }
+  const rawHeight = quietStackHeight(blocks);
+  let available = format.height - top - bottom;
+  if (rawHeight > available) {
+    const topFloor = 28;
+    const bottomFloor = recipe.absoluteMark ? recipe.absoluteMark.bottom + recipe.absoluteMark.size + 10 : 40;
+    let deficit = rawHeight - available;
+    const topGain = Math.min(Math.max(0, top - topFloor), deficit);
+    top -= topGain;
+    deficit -= topGain;
+    const bottomGain = Math.min(Math.max(0, bottom - bottomFloor), deficit);
+    bottom -= bottomGain;
+    available = format.height - top - bottom;
+  }
+  const fitted = fitQuietBlocks(blocks, available);
   const nodes: SceneNode[] = [
     {
       kind: 'quiet',
@@ -468,7 +511,7 @@ function quietNodes(recipe: QuietRecipe, style: Style, moment: Moment, message: 
       align: style.align,
       anchor,
       color: style.textColor,
-      blocks,
+      blocks: fitted,
     },
   ];
   if (recipe.absoluteMark) {
@@ -483,13 +526,29 @@ function quietNodes(recipe: QuietRecipe, style: Style, moment: Moment, message: 
   return nodes;
 }
 
-function quietBlock(spec: QuietBlockSpec, style: Style, moment: Moment, message: string): QuietBlock | null {
+function quietBlock(spec: QuietBlockSpec, style: Style, moment: Moment, message: string, contentWidth: number): QuietBlock | null {
   if (spec.kind === 'text') {
-    const text = renderToken(spec.token, moment, message);
-    if (!text) return null;
+    const raw = renderToken(spec.token, moment, message);
+    if (!raw) return null;
+    if (spec.token === 'message') {
+      const text = raw.trim();
+      const font = noteFace(style.displayFontId, style.monoFontId, spec.font);
+      const fontSize = noteFontSize(text.length, spec.size);
+      return {
+        kind: 'text',
+        text,
+        font,
+        fontSize,
+        lineHeight: NOTE_LEADING,
+        marginTop: spec.marginTop,
+        opacity: spec.opacity,
+        maxWidth: noteMaxWidth(fontSize, noteRhythm(font.family), contentWidth),
+        wrap: true,
+      };
+    }
     return {
       kind: 'text',
-      text,
+      text: raw,
       font: fontOf(style, spec.font),
       fontSize: spec.size,
       lineHeight: spec.lineHeight,
@@ -497,6 +556,27 @@ function quietBlock(spec: QuietBlockSpec, style: Style, moment: Moment, message:
       marginTop: spec.marginTop,
       opacity: spec.opacity,
       maxWidth: spec.maxWidth,
+    };
+  }
+  if (spec.kind === 'note') {
+    const raw = renderToken('message', moment, message);
+    if (!raw?.trim()) return null;
+    const text = raw.trim();
+    const font = noteFace(style.displayFontId, style.monoFontId, spec.font);
+    const fontSize = noteFontSize(text.length, spec.ceiling);
+    return {
+      kind: 'note',
+      label: 'Note',
+      text,
+      font,
+      fontSize,
+      lineHeight: NOTE_LEADING,
+      labelFont: fontOf(style, 'mono'),
+      labelSize: spec.labelSize,
+      tracking: spec.tracking,
+      marginTop: spec.marginTop,
+      maxWidth: noteMaxWidth(fontSize, noteRhythm(font.family), contentWidth),
+      color: style.textColor,
     };
   }
   if (spec.kind === 'coords') {
@@ -570,6 +650,90 @@ function quietBlock(spec: QuietBlockSpec, style: Style, moment: Moment, message:
     opacity: spec.opacity,
     tracking: spec.tracking,
   };
+}
+
+export function quietStackHeight(blocks: QuietBlock[]): number {
+  return blocks.reduce((sum, block) => sum + quietBlockHeight(block), 0);
+}
+
+function quietBlockHeight(block: QuietBlock): number {
+  switch (block.kind) {
+    case 'text': {
+      const lines = block.wrap
+        ? wrappedLineCount(block.text, block.fontSize, block.maxWidth ?? 10_000, noteRhythm(block.font.family))
+        : 1;
+      return block.marginTop + block.fontSize * block.lineHeight * Math.max(1, lines);
+    }
+    case 'note': {
+      const lines = wrappedLineCount(block.text, block.fontSize, block.maxWidth, noteRhythm(block.font.family));
+      return block.marginTop + 10 + block.labelSize * 1.4 + 8 + block.fontSize * block.lineHeight * Math.max(1, lines);
+    }
+    case 'coords':
+      return block.marginTop + block.lines.length * block.fontSize * block.lineHeight;
+    case 'rule':
+      return block.marginTop + block.height + block.marginBottom;
+    case 'rich-time':
+      return block.marginTop + block.fontSize * block.lineHeight * 2;
+    case 'meta':
+      return block.marginTop + block.lines.length * block.fontSize * block.lineHeight;
+    case 'rows':
+      return block.marginTop + block.rows.length * (block.gap * 2 + block.valueSize * block.lineHeight);
+    case 'telemetry':
+      return block.marginTop + block.lines.length * block.fontSize * block.lineHeight;
+    default:
+      return 0;
+  }
+}
+
+/** Height of the footer stack, with a split note sharing a row with the small print. */
+export function footerBlockHeight(node: FooterNode): number {
+  const message = node.message;
+  let messageHeight = 0;
+  if (message) {
+    const lines = wrappedLineCount(
+      message.text,
+      message.fontSize,
+      message.maxWidth ?? 10_000,
+      noteRhythm(message.font.family),
+    );
+    const gap = node.arrangement === 'split' ? 0 : message.marginBottom;
+    messageHeight = lines * message.fontSize * message.lineHeight + gap;
+  }
+  const metaHeight = node.metaLines.length * node.metaSize * node.metaLineHeight;
+  const splitHeight =
+    node.arrangement === 'message-then-split' && (node.splitLeft || node.splitRight)
+      ? node.metaSize * node.metaLineHeight
+      : 0;
+  const body = node.arrangement === 'split' ? Math.max(messageHeight, metaHeight) : messageHeight + metaHeight + splitHeight;
+  const extra = node.extraLines.length ? 10 + node.extraLines.length * node.metaSize * node.metaLineHeight : 0;
+  const telemetry = node.telemetry
+    ? 12 + node.telemetry.lines.length * node.telemetry.fontSize * node.telemetry.lineHeight
+    : 0;
+  const mark = node.mark ? node.mark.marginTop + node.mark.fontSize * 1.4 : 0;
+  return body + extra + telemetry + mark;
+}
+
+function fitQuietBlocks(blocks: QuietBlock[], available: number): QuietBlock[] {
+  if (quietStackHeight(blocks) <= available) return blocks;
+  const next = structuredClone(blocks) as QuietBlock[];
+  for (const block of next) {
+    if (block.kind === 'text' && block.wrap) block.marginTop = Math.min(block.marginTop, 28);
+    if (block.kind === 'note') block.marginTop = Math.min(block.marginTop, 14);
+    if (block.kind === 'meta') block.marginTop = Math.min(block.marginTop, 18);
+    if (block.kind === 'coords') block.marginTop = Math.min(block.marginTop, 24);
+    if (block.kind === 'rich-time') block.marginTop = Math.min(block.marginTop, 24);
+  }
+  const rows = next.find((block) => block.kind === 'rows');
+  if (rows && rows.kind === 'rows') {
+    while (quietStackHeight(next) > available && rows.gap > 6) rows.gap -= 1;
+  }
+  if (quietStackHeight(next) <= available) return next;
+  const coords = next.find((block) => block.kind === 'coords');
+  if (coords && coords.kind === 'coords') {
+    const floor = Math.max(72, Math.round(coords.fontSize * 0.42));
+    while (quietStackHeight(next) > available && coords.fontSize > floor) coords.fontSize -= 2;
+  }
+  return next;
 }
 
 function measurementLabel(id: string): string {

@@ -3,7 +3,9 @@ import { exampleMoment, EXAMPLE_INSTANT } from '../data/moment';
 import type { SensorSample } from '../data/telemetry';
 import { contrastRatio } from '../color/contrast';
 import { PRESETS, presetById, styleFromPreset } from '../style/presets';
-import { buildScene, type FitStackNode, type FooterNode, type QuietNode } from './scene';
+import { noteFontSize, noteRhythm, wrappedLineCount } from './note';
+import { randomStyle } from '../style/randomize';
+import { buildScene, footerBlockHeight, quietStackHeight, type FitStackNode, type FooterNode, type QuietBlock, type QuietNode } from './scene';
 
 const moment = exampleMoment(EXAMPLE_INSTANT);
 
@@ -206,8 +208,10 @@ describe('preset compositions', () => {
       { label: 'Time', value: '6:12 PM PDT' },
       { label: 'Elevation', value: '18 m' },
       { label: 'UTC', value: '2026-10-23 01:12:07 UTC' },
-      { label: 'Note', value: 'Issued for record.' },
     ]);
+    const note = quiet.blocks.find((block) => block.kind === 'note');
+    expect(note && note.kind === 'note' && note.text).toBe('Issued for record.');
+    expect(note && note.kind === 'note' && note.label).toBe('Note');
     expect(contrastRatio(preset.textColor, preset.backgroundColor)).toBeGreaterThan(10);
   });
 
@@ -287,5 +291,115 @@ describe('preset compositions', () => {
     const footer = scene.nodes.find((node) => node.kind === 'footer') as FooterNode;
     expect(footer.telemetry).toBeUndefined();
     expect(footer.extraLines).toEqual(['±8 m']);
+  });
+});
+
+const NOTE_60 = 'The light on the water, right now, and a little after that.';
+const NOTE_200 =
+  'There is no limit to what you can add at the bottom of a transient. The note is the human voice of the piece, and it should wrap into a proper block that stays on the card and remains easy to read it.';
+
+function noteBlock(quiet: QuietNode): QuietBlock | undefined {
+  return quiet.blocks.find((block) => block.kind === 'note' || (block.kind === 'text' && block.wrap));
+}
+
+describe('note measure', () => {
+  it('uses a 200-character sentence', () => {
+    expect(NOTE_60.length).toBeGreaterThanOrEqual(55);
+    expect(NOTE_60.length).toBeLessThanOrEqual(65);
+    expect(NOTE_200).toHaveLength(200);
+  });
+
+  it('wraps every preset at 0, 60, and 200 characters, with telemetry, inside the square', () => {
+    const sensed = {
+      ...moment,
+      accuracy: 12,
+      altitudeAccuracy: 4,
+      speed: 1.4,
+      course: 182,
+      temperatureC: 20,
+      sensors,
+    };
+    const notes = ['', NOTE_60, NOTE_200];
+    for (const preset of PRESETS) {
+      for (const text of notes) {
+        for (const telemetry of [false, true]) {
+          const style = styleFromPreset(preset);
+          style.measurements = {
+            ...style.measurements,
+            telemetry,
+            temperature: telemetry,
+            sun: telemetry,
+          };
+          const scene = buildScene(style, sensed, text);
+          const quiet = scene.nodes.find((node) => node.kind === 'quiet') as QuietNode | undefined;
+          const footer = scene.nodes.find((node) => node.kind === 'footer') as FooterNode | undefined;
+          if (quiet) {
+            const available = scene.height - quiet.top - quiet.bottom;
+            const height = quietStackHeight(quiet.blocks);
+            expect(height, `${preset.id} ${text.length} telemetry ${telemetry}`).toBeLessThanOrEqual(available + 0.5);
+            const note = noteBlock(quiet);
+            if (!text.trim()) {
+              expect(note, preset.id).toBeUndefined();
+            } else if (note && (note.kind === 'note' || note.kind === 'text')) {
+              expect(note.fontSize, preset.id).toBeGreaterThanOrEqual(28);
+              expect(note.lineHeight).toBeGreaterThanOrEqual(1.35);
+              expect(note.lineHeight).toBeLessThanOrEqual(1.45);
+              expect(note.maxWidth).toBeLessThanOrEqual(scene.width - quiet.left - quiet.right);
+              const lines = wrappedLineCount(note.text, note.fontSize, note.maxWidth ?? 0, noteRhythm(note.font.family));
+              if (text.length >= 180) {
+                expect(lines, preset.id).toBeGreaterThanOrEqual(5);
+                expect(lines, preset.id).toBeLessThanOrEqual(7);
+              }
+              const date = quiet.blocks.find(
+                (block) => block.kind === 'rich-time' || (block.kind === 'text' && !block.wrap && /\d/.test(block.text)),
+              );
+              if (date && (date.kind === 'rich-time' || date.kind === 'text')) {
+                expect(note.fontSize, preset.id).toBeLessThan(date.fontSize);
+              }
+            }
+          }
+          if (footer) {
+            const height = footerBlockHeight(footer);
+            expect(height + footer.bottom, `${preset.id} footer`).toBeLessThanOrEqual(scene.height - 24);
+            if (!text.trim()) expect(footer.message).toBeUndefined();
+            if (footer.message && text.length >= 180) {
+              expect(footer.message.fontSize).toBeGreaterThanOrEqual(28);
+              expect(footer.message.lineHeight).toBeGreaterThanOrEqual(1.35);
+              expect(footer.message.maxWidth).toBeLessThanOrEqual(scene.width - footer.left - footer.right);
+              const lines = wrappedLineCount(
+                footer.message.text,
+                footer.message.fontSize,
+                footer.message.maxWidth ?? scene.width,
+                noteRhythm(footer.message.font.family),
+              );
+              expect(lines, preset.id).toBeGreaterThanOrEqual(5);
+              expect(lines, preset.id).toBeLessThanOrEqual(7);
+              expect(footer.arrangement).not.toBe('split');
+            }
+          }
+        }
+      }
+    }
+  });
+
+  it('steps a short note above the long-note floor', () => {
+    expect(noteFontSize(NOTE_60.length, 32)).toBeGreaterThan(noteFontSize(NOTE_200.length, 32));
+    expect(noteFontSize(NOTE_200.length, 46)).toBe(28);
+  });
+
+  it('gives a condensed random face a wrapping mono note that still fits', () => {
+    let style = styleFromPreset(presetById('01'));
+    const rng = () => 0.91;
+    style = randomStyle(style, rng);
+    style.displayFontId = 'anton';
+    style.layout = 'quiet';
+    style.recipeId = 'quiet-generic';
+    style.measurements = { ...style.measurements, telemetry: true, temperature: true, sun: true };
+    const sensed = { ...moment, temperatureC: 18, accuracy: 12, altitudeAccuracy: 4, speed: 1.2, course: 90, sensors };
+    const scene = buildScene(style, sensed, NOTE_200);
+    const quiet = scene.nodes.find((node) => node.kind === 'quiet') as QuietNode;
+    const note = noteBlock(quiet);
+    expect(note && (note.kind === 'text' || note.kind === 'note') && note.font.family).toMatch(/Mono/);
+    expect(quietStackHeight(quiet.blocks)).toBeLessThanOrEqual(scene.height - quiet.top - quiet.bottom + 0.5);
   });
 });
