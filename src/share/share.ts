@@ -17,7 +17,11 @@ export async function sharePng(blob: Blob, filename: string): Promise<'shared' |
   if (typeof navigator === 'undefined' || typeof navigator.share !== 'function') return 'unsupported';
   const file = new File([blob], filename, { type: 'image/png' });
   const payload = webSharePayload(file);
-  if (!navigator.canShare?.(payload)) return 'unsupported';
+  try {
+    if (!navigator.canShare?.(payload)) return 'unsupported';
+  } catch {
+    return 'unsupported';
+  }
   const previousTitle = typeof document === 'undefined' ? '' : document.title;
   if (typeof document !== 'undefined') document.title = '';
   try {
@@ -48,19 +52,44 @@ export function isAndroidPlatform(nav?: CaptureNavigator): boolean {
   return /Android/i.test(source?.userAgent ?? '');
 }
 
-export type CaptureDelivery = 'shared' | 'cancelled' | 'downloaded' | 'saved';
+export type CaptureDelivery = 'shared' | 'cancelled' | 'downloaded' | 'saved' | 'opened';
+
+/**
+ * iPhone, iPad, and iPod, including iPadOS when the platform string is iOS.
+ * A desktop platform is not iOS even if the user agent mentions a phone.
+ */
+export function isIosPlatform(nav?: CaptureNavigator): boolean {
+  const source: CaptureNavigator | undefined =
+    nav ?? (typeof navigator === 'undefined' ? undefined : (navigator as CaptureNavigator));
+  if (source?.userAgentData?.platform === 'iOS') return true;
+  return /iPhone|iPad|iPod/i.test(source?.userAgent ?? '');
+}
+
+/**
+ * Firefox, Chrome, Edge, and the other iOS browsers ship a vendor token.
+ * Safari’s user agent does not. WebKit on those browsers may report that a
+ * file can be shared and then reject the sheet.
+ */
+export function isIosNonSafari(nav?: CaptureNavigator): boolean {
+  if (!isIosPlatform(nav)) return false;
+  const source: CaptureNavigator | undefined =
+    nav ?? (typeof navigator === 'undefined' ? undefined : (navigator as CaptureNavigator));
+  return /FxiOS|CriOS|EdgiOS|OPiOS|DuckDuckGo|GSA\/|Focus\//i.test(source?.userAgent ?? '');
+}
 
 /**
  * Capture puts the image where a phone can keep it.
  * Android downloads the PNG first, so it lands in Downloads and shows in Gallery, then opens the share sheet.
- * iOS opens the sheet alone; Save Image lives there, and cancelling stores nothing.
- * A desktop browser that cannot share a file downloads the PNG.
+ * iOS Safari opens the sheet alone; Save Image lives there, and cancelling stores nothing.
+ * When the file sheet is missing or rejects with anything other than a cancel, the PNG is still handed off:
+ * iOS shows it for a long-press save, and every other browser downloads it.
  * On Android, dismissing the sheet still keeps the download (`saved`).
  */
 export async function saveImage(
   blob: Blob,
   filename: string,
   download: (blob: Blob, filename: string) => void,
+  present?: (blob: Blob, filename: string) => void,
 ): Promise<CaptureDelivery> {
   if (isAndroidPlatform()) {
     download(blob, filename);
@@ -69,7 +98,19 @@ export async function saveImage(
   }
   const result = await sharePng(blob, filename);
   if (result === 'shared' || result === 'cancelled') return result;
-  if (canShareFiles()) throw new Error('Could not open the share sheet');
+  return handoffImage(blob, filename, download, present);
+}
+
+function handoffImage(
+  blob: Blob,
+  filename: string,
+  download: (blob: Blob, filename: string) => void,
+  present?: (blob: Blob, filename: string) => void,
+): CaptureDelivery {
+  if (isIosPlatform() && present) {
+    present(blob, filename);
+    return 'opened';
+  }
   download(blob, filename);
   return 'downloaded';
 }
