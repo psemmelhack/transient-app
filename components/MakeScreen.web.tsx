@@ -38,6 +38,9 @@ export function MakeScreen({ onMap, fixture = false }: { onMap: () => void; fixt
   const [dimmed, setDimmed] = useState(false);
   const [working, setWorking] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
+  const [moreBelow, setMoreBelow] = useState(false);
+  const [heldUrl, setHeldUrl] = useState<string | null>(null);
+  const heldUrlRef = useRef<string | null>(null);
   const scrollerRef = useRef<HTMLDivElement>(null);
   const pinRef = useRef<HTMLDivElement>(null);
   const dockRef = useRef<HTMLDivElement>(null);
@@ -59,12 +62,24 @@ export function MakeScreen({ onMap, fixture = false }: { onMap: () => void; fixt
   });
 
   useEffect(() => {
+    return () => {
+      if (heldUrlRef.current) URL.revokeObjectURL(heldUrlRef.current);
+    };
+  }, []);
+
+  useEffect(() => {
     const scroller = scrollerRef.current;
     if (!scroller) return;
-    const apply = () => setViewport({ width: scroller.clientWidth, height: scroller.clientHeight });
+    const apply = () => {
+      setViewport({ width: scroller.clientWidth, height: scroller.clientHeight });
+      const remaining = scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight;
+      const show = remaining > 72;
+      setMoreBelow((prev) => (prev === show ? prev : show));
+    };
     apply();
     const observer = new ResizeObserver(apply);
     observer.observe(scroller);
+    for (const child of scroller.children) observer.observe(child);
     return () => observer.disconnect();
   }, []);
 
@@ -89,6 +104,16 @@ export function MakeScreen({ onMap, fixture = false }: { onMap: () => void; fixt
     if (!scroller) return;
     const next = scroller.scrollTop > 8;
     setAtControls((prev) => (prev === next ? prev : next));
+    const remaining = scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight;
+    const show = remaining > 72;
+    setMoreBelow((prev) => (prev === show ? prev : show));
+  }
+
+  function onMore() {
+    const scroller = scrollerRef.current;
+    if (!scroller) return;
+    const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    scroller.scrollBy({ top: scroller.clientHeight, behavior: reduce ? 'auto' : 'smooth' });
   }
 
   function onStyle() {
@@ -116,36 +141,57 @@ export function MakeScreen({ onMap, fixture = false }: { onMap: () => void; fixt
     if (!stage) throw new Error('The composition is not ready');
     const sceneNow = buildScene(style, frozen, note, frozen.at);
     const raw = await captureStage(stage, sceneNow);
-    const bytes = new Uint8Array(await raw.arrayBuffer());
-    const sun = sunPosition(frozen.at, frozen.latitude, frozen.longitude);
-    const stamped = insertPngText(
-      bytes,
-      metadataFor({
-        latitude: frozen.latitude,
-        longitude: frozen.longitude,
-        altitude: frozen.altitude,
-        accuracy: frozen.accuracy,
-        utc: frozen.at.toISOString(),
-        timezone: frozen.timezone,
-        message: note,
-        place: frozen.place?.full ?? null,
-        temperatureC: frozen.temperatureC,
-        sunAzimuth: sun.azimuth,
-        sunAltitude: sun.altitude,
-      }),
-    );
-    const copy = new Uint8Array(stamped.byteLength);
-    copy.set(stamped);
-    return { png: new Blob([copy.buffer]), scene: sceneNow };
+    let png = raw;
+    try {
+      const bytes = new Uint8Array(await raw.arrayBuffer());
+      const sun = sunPosition(frozen.at, frozen.latitude, frozen.longitude);
+      const stamped = insertPngText(
+        bytes,
+        metadataFor({
+          latitude: frozen.latitude,
+          longitude: frozen.longitude,
+          altitude: frozen.altitude,
+          accuracy: frozen.accuracy,
+          utc: frozen.at.toISOString(),
+          timezone: frozen.timezone,
+          message: note,
+          place: frozen.place?.full ?? null,
+          temperatureC: frozen.temperatureC,
+          sunAzimuth: sun.azimuth,
+          sunAltitude: sun.altitude,
+        }),
+      );
+      const copy = new Uint8Array(stamped.byteLength);
+      copy.set(stamped);
+      png = new Blob([copy.buffer], { type: 'image/png' });
+    } catch {
+      png = raw.type === 'image/png' ? raw : new Blob([raw], { type: 'image/png' });
+    }
+    return { png, scene: sceneNow };
+  }
+
+  function presentImage(blob: Blob) {
+    const url = URL.createObjectURL(blob);
+    if (heldUrlRef.current) URL.revokeObjectURL(heldUrlRef.current);
+    heldUrlRef.current = url;
+    setHeldUrl(url);
+  }
+
+  function dismissHeld() {
+    if (heldUrlRef.current) URL.revokeObjectURL(heldUrlRef.current);
+    heldUrlRef.current = null;
+    setHeldUrl(null);
   }
 
   async function onSave() {
     if (!moment || working) return;
     setWorking(true);
+    let produced = false;
     try {
       const frozen = freeze(moment, telemetry.capture());
       const rendered = await renderPng(frozen);
-      const delivered = await saveImage(rendered.png, captureFileName(frozen.at, frozen.timezone), downloadBlob);
+      produced = true;
+      const delivered = await saveImage(rendered.png, captureFileName(frozen.at, frozen.timezone), downloadBlob, presentImage);
       if (delivered === 'cancelled') return;
       await saveTransient(
         makeRecord({
@@ -160,7 +206,7 @@ export function MakeScreen({ onMap, fixture = false }: { onMap: () => void; fixt
       setSharedWith('');
       setToast(capturedToast);
     } catch {
-      setToast('Couldn’t make the image');
+      setToast(produced ? 'Couldn’t share the image' : 'Couldn’t make the image');
     } finally {
       setLock(null);
       setWorking(false);
@@ -260,9 +306,33 @@ export function MakeScreen({ onMap, fixture = false }: { onMap: () => void; fixt
         </div>
       </div>
 
+      <div className="fold-hint-slot">
+        <button
+          type="button"
+          aria-label="More below"
+          tabIndex={moreBelow && !heldUrl ? 0 : -1}
+          onClick={onMore}
+          className={moreBelow && !heldUrl ? 'fold-hint' : 'fold-hint fold-hint-hidden'}
+        >
+          <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M6.5 9.25 12 14.75 17.5 9.25" fill="none" stroke={muted} strokeWidth="1.25" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </button>
+      </div>
+
       {toast && (
         <div role="status" style={toastStyle}>
           {toast}
+        </div>
+      )}
+
+      {heldUrl && (
+        <div role="dialog" aria-label="Captured image" style={heldStyle}>
+          <img src={heldUrl} alt="Captured transient" style={heldImg} />
+          <p style={heldHint}>Long-press the image to save it</p>
+          <button type="button" onClick={dismissHeld} style={heldDone}>
+            Done
+          </button>
         </div>
       )}
     </div>
@@ -400,6 +470,54 @@ const retryStyle: CSSProperties = {
   textUnderlineOffset: 3,
 };
 
+const heldStyle: CSSProperties = {
+  position: 'fixed',
+  inset: 0,
+  zIndex: 50,
+  background: paper,
+  display: 'flex',
+  flexDirection: 'column',
+  alignItems: 'center',
+  justifyContent: 'center',
+  gap: 16,
+  paddingTop: 'max(24px, env(safe-area-inset-top))',
+  paddingBottom: 'max(24px, env(safe-area-inset-bottom))',
+  paddingLeft: 'max(22px, env(safe-area-inset-left))',
+  paddingRight: 'max(22px, env(safe-area-inset-right))',
+  boxSizing: 'border-box',
+};
+
+const heldImg: CSSProperties = {
+  maxWidth: '100%',
+  maxHeight: 'calc(100% - 96px)',
+  objectFit: 'contain',
+  boxShadow: '0 0 0 1px rgba(28,27,25,0.14)',
+  WebkitTouchCallout: 'default',
+};
+
+const heldHint: CSSProperties = {
+  margin: 0,
+  fontFamily: ui,
+  fontWeight: 400,
+  fontSize: 13,
+  letterSpacing: '0.02em',
+  color: muted,
+};
+
+const heldDone: CSSProperties = {
+  minWidth: 44,
+  minHeight: 44,
+  border: 'none',
+  background: 'transparent',
+  padding: '0 14px',
+  cursor: 'pointer',
+  fontFamily: ui,
+  fontWeight: 500,
+  fontSize: 14,
+  letterSpacing: '0.04em',
+  color: ink,
+};
+
 const toastStyle: CSSProperties = {
   position: 'fixed',
   left: '50%',
@@ -446,7 +564,44 @@ const chromeCss = `
     clip: rect(0, 0, 0, 0);
     border: 0;
   }
+  .fold-hint-slot {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: calc(10px + env(safe-area-inset-bottom));
+    z-index: 20;
+    height: 24px;
+    display: flex;
+    justify-content: center;
+    pointer-events: none;
+  }
+  .fold-hint {
+    width: 24px;
+    height: 24px;
+    margin: 0;
+    padding: 0;
+    border: none;
+    background: transparent;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    opacity: 0.46;
+    pointer-events: auto;
+    transition: opacity 420ms ease;
+    animation: fold-bob 3.6s ease-in-out infinite;
+  }
+  .fold-hint-hidden {
+    opacity: 0;
+    pointer-events: none;
+    animation: none;
+  }
+  @keyframes fold-bob {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(3px); }
+  }
   @media (prefers-reduced-motion: reduce) {
     .tumble { animation: none; }
+    .fold-hint { animation: none; transition: none; }
   }
 `;

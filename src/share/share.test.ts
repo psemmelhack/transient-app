@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { captureFileName, fileNameFor } from '../export/download';
-import { isAndroidPlatform, saveImage, sharePng, webSharePayload } from './share';
+import { isAndroidPlatform, isIosNonSafari, isIosPlatform, saveImage, sharePng, webSharePayload } from './share';
 
 const filename = '38.261602_-122.048768_20261024T041839Z.png';
 const captureName = 'transient-20261024-180203.png';
@@ -99,7 +99,7 @@ describe('share payload', () => {
     expect(downloads).toEqual([filename]);
   });
 
-  it('does not download when file sharing exists but the sheet fails to open', async () => {
+  it('downloads when file sharing exists but the sheet fails to open', async () => {
     const downloads: string[] = [];
     vi.stubGlobal('document', { title: 'Transient' });
     vi.stubGlobal('navigator', {
@@ -108,10 +108,92 @@ describe('share payload', () => {
         throw new DOMException('denied', 'NotAllowedError');
       },
     });
-    await expect(saveImage(new Blob(['png'], { type: 'image/png' }), filename, () => downloads.push('no'))).rejects.toThrow(
-      'Could not open the share sheet',
+    const result = await saveImage(new Blob(['png'], { type: 'image/png' }), filename, () => downloads.push(filename));
+    expect(result).toBe('downloaded');
+    expect(downloads).toEqual([filename]);
+  });
+
+  it('downloads when canShare throws while checking the file', async () => {
+    const downloads: string[] = [];
+    vi.stubGlobal('document', { title: 'Transient' });
+    vi.stubGlobal('navigator', {
+      canShare: () => {
+        throw new TypeError('files are not shareable');
+      },
+      share: async () => {
+        throw new Error('share should not be called');
+      },
+    });
+    const result = await saveImage(new Blob(['png'], { type: 'image/png' }), filename, () => downloads.push(filename));
+    expect(result).toBe('downloaded');
+    expect(downloads).toEqual([filename]);
+  });
+
+  const firefoxIos =
+    'Mozilla/5.0 (iPhone; CPU iPhone OS 18_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) FxiOS/142.0 Mobile/15E148 Safari/605.1.15';
+
+  it('on Firefox iOS shows the image when the file sheet rejects', async () => {
+    const downloads: string[] = [];
+    const presented: string[] = [];
+    vi.stubGlobal('document', { title: 'Transient' });
+    vi.stubGlobal('navigator', {
+      userAgent: firefoxIos,
+      canShare: () => true,
+      share: async () => {
+        throw new DOMException('denied', 'NotAllowedError');
+      },
+    });
+    const result = await saveImage(
+      new Blob(['png'], { type: 'image/png' }),
+      captureName,
+      () => downloads.push('no'),
+      (_blob, name) => presented.push(name),
     );
+    expect(result).toBe('opened');
+    expect(presented).toEqual([captureName]);
     expect(downloads).toEqual([]);
+  });
+
+  it('on Firefox iOS shows the image when file sharing is unavailable', async () => {
+    const presented: string[] = [];
+    vi.stubGlobal('navigator', {
+      userAgent: firefoxIos,
+      share: async () => {
+        throw new Error('share should not be called');
+      },
+    });
+    const result = await saveImage(
+      new Blob(['png'], { type: 'image/png' }),
+      captureName,
+      () => {
+        throw new Error('download should not be called');
+      },
+      () => presented.push('yes'),
+    );
+    expect(result).toBe('opened');
+    expect(presented).toEqual(['yes']);
+  });
+
+  it('on Firefox iOS leaves a cancelled sheet unrecorded', async () => {
+    const presented: string[] = [];
+    const downloads: string[] = [];
+    vi.stubGlobal('document', { title: 'Transient' });
+    vi.stubGlobal('navigator', {
+      userAgent: firefoxIos,
+      canShare: () => true,
+      share: async () => {
+        throw new DOMException('cancelled', 'AbortError');
+      },
+    });
+    const result = await saveImage(
+      new Blob(['png'], { type: 'image/png' }),
+      captureName,
+      () => downloads.push('no'),
+      () => presented.push('no'),
+    );
+    expect(result).toBe('cancelled');
+    expect(downloads).toEqual([]);
+    expect(presented).toEqual([]);
   });
 
   it('on Android downloads the PNG and then opens the share sheet', async () => {
@@ -202,6 +284,29 @@ describe('share payload', () => {
     expect(shared).toBe(false);
   });
 
+});
+
+describe('ios detection', () => {
+  it('recognizes Firefox iOS and leaves Safari and desktop alone', () => {
+    const firefox =
+      'Mozilla/5.0 (iPhone; CPU iPhone OS 18_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) FxiOS/142.0 Mobile/15E148 Safari/605.1.15';
+    const safari =
+      'Mozilla/5.0 (iPhone; CPU iPhone OS 18_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.5 Mobile/15E148 Safari/604.1';
+    expect(isIosNonSafari({ userAgent: firefox })).toBe(true);
+    expect(isIosPlatform({ userAgent: firefox })).toBe(true);
+    expect(isIosNonSafari({ userAgent: safari })).toBe(false);
+    expect(isIosPlatform({ userAgent: safari })).toBe(true);
+    expect(isIosPlatform({ userAgentData: { platform: 'iOS' }, userAgent: 'Mozilla/5.0' })).toBe(true);
+    expect(
+      isIosNonSafari({
+        userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 CriOS/120.0.0.0 Mobile/15E148 Safari/604.1',
+      }),
+    ).toBe(true);
+    expect(isIosPlatform({ userAgentData: { platform: 'Linux' }, userAgent: 'Mozilla/5.0 (X11; Linux x86_64; rv:128.0) Gecko/20100101 Firefox/128.0' })).toBe(
+      false,
+    );
+    expect(isIosNonSafari({ userAgent: 'Mozilla/5.0 (Android 14; Mobile; rv:128.0) Gecko/128.0 Firefox/128.0' })).toBe(false);
+  });
 });
 
 describe('android detection', () => {

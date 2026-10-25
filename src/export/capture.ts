@@ -4,7 +4,13 @@ import { fitsSettled } from '../composition/fitSession';
 
 export async function captureStage(stage: HTMLElement, scene: Scene): Promise<Blob> {
   if (typeof document !== 'undefined' && document.fonts?.ready) {
-    await document.fonts.ready;
+    await Promise.race([
+      document.fonts.ready.then(
+        () => undefined,
+        () => undefined,
+      ),
+      new Promise((resolve) => setTimeout(resolve, 2000)),
+    ]);
   }
   await Promise.race([fitsSettled(), new Promise((resolve) => setTimeout(resolve, 1500))]);
   await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve(null))));
