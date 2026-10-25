@@ -2,6 +2,7 @@ import { forwardRef, memo, useEffect, useLayoutEffect, useRef, useState, type Re
 import type { CssFont } from '../src/composition/fonts';
 import { fontCss } from '../src/composition/fonts';
 import { fitLine, type ProbeMetrics } from '../src/composition/fit';
+import { noteRhythm, wrapNote } from '../src/composition/note';
 import { beginFit, endFit } from '../src/composition/fitSession';
 import type {
   Align,
@@ -361,11 +362,9 @@ function Message({ node }: { node: FooterNode }) {
         marginLeft: align === 'center' || align === 'right' ? 'auto' : undefined,
         marginRight: align === 'center' ? 'auto' : undefined,
         textAlign: align,
-        whiteSpace: 'normal',
-        overflowWrap: 'break-word',
       }}
     >
-      {node.message.text}
+      <NoteLines text={node.message.text} fontSize={node.message.fontSize} maxWidth={node.message.maxWidth ?? 10_000} family={node.message.font.family} />
     </div>
   );
 }
@@ -531,12 +530,10 @@ function QuietPiece({ block, align }: { block: QuietBlock; align: Align }) {
               marginTop: 8,
               width: block.maxWidth,
               maxWidth: '100%',
-              whiteSpace: 'normal',
-              overflowWrap: 'break-word',
               fontFeatureSettings: block.font.features,
             }}
           >
-            {block.text}
+            <NoteLines text={block.text} fontSize={block.fontSize} maxWidth={block.maxWidth} family={block.font.family} />
           </div>
         </div>
       </div>
@@ -557,12 +554,10 @@ function QuietPiece({ block, align }: { block: QuietBlock; align: Align }) {
           maxWidth: '100%',
           alignSelf: align === 'center' ? 'center' : align === 'right' ? 'flex-end' : 'flex-start',
           textAlign: align,
-          whiteSpace: 'normal',
-          overflowWrap: 'break-word',
           fontFeatureSettings: block.font.features,
         }}
       >
-        {block.text}
+        <NoteLines text={block.text} fontSize={block.fontSize} maxWidth={block.maxWidth ?? 10_000} family={block.font.family} />
       </div>
     );
   }
@@ -735,11 +730,21 @@ function Mark({ node }: { node: MarkNode }) {
         color: node.color,
         opacity: node.opacity,
         letterSpacing: node.tracking ? `${node.tracking}em` : undefined,
+        paddingRight: node.align === 'right' && node.tracking ? `${node.tracking}em` : undefined,
       }}
     >
       {node.text}
     </div>
   );
+}
+
+function NoteLines({ text, fontSize, maxWidth, family }: { text: string; fontSize: number; maxWidth: number; family: string }) {
+  const lines = wrapNote(text, fontSize, maxWidth, noteRhythm(family));
+  return lines.map((line, index) => (
+    <div key={`${index}-${line}`} style={{ whiteSpace: 'pre' }}>
+      {line}
+    </div>
+  ));
 }
 
 function Kicker({ node }: { node: KickerNode }) {

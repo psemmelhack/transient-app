@@ -54,31 +54,116 @@ export function noteMaxWidth(fontSize: number, rhythm: NoteRhythm, contentWidth:
   return Math.max(fontSize * 8, Math.min(contentWidth, wanted));
 }
 
+const RUNT_RATIO = 0.4;
+
+interface NoteAtom {
+  text: string;
+  spaceBefore: boolean;
+}
+
+/** Character columns that fit the measure. The same count drives preview and export. */
+export function noteColumns(fontSize: number, maxWidth: number, rhythm: NoteRhythm): number {
+  const unit = Math.max(1, fontSize * MEASURE[rhythm].em);
+  return Math.max(8, Math.floor(maxWidth / unit));
+}
+
+/**
+ * Balanced note lines. Greedy wrap first, then the narrowest measure that keeps
+ * that line count, then words are pulled down until the last line is at least
+ * ~40% of the original measure. A word longer than the measure is broken into
+ * even pieces. Preview and export both render these lines, so they match.
+ */
+export function wrapNote(text: string, fontSize: number, maxWidth: number, rhythm: NoteRhythm): string[] {
+  const trimmed = text.trim();
+  if (!trimmed) return [];
+  const columns = noteColumns(fontSize, maxWidth, rhythm);
+  const atoms = noteAtoms(trimmed, columns);
+  const greedy = packAtoms(atoms, columns).map(renderAtoms);
+  if (greedy.length <= 1) return greedy;
+  let low = 1;
+  let high = columns;
+  let balanced = greedy;
+  while (low <= high) {
+    const mid = Math.floor((low + high) / 2);
+    const lines = packAtoms(atoms, mid).map(renderAtoms);
+    if (lines.length <= greedy.length) {
+      balanced = lines;
+      high = mid - 1;
+    } else {
+      low = mid + 1;
+    }
+  }
+  return fillLastLine(balanced, columns);
+}
+
 /** Greedy word wrap, so a 200-character sentence lands on a real line count. */
 export function wrappedLineCount(text: string, fontSize: number, maxWidth: number, rhythm: NoteRhythm): number {
-  const trimmed = text.trim();
-  if (!trimmed) return 0;
-  const { em } = MEASURE[rhythm];
-  const charsPerLine = Math.max(8, Math.floor(maxWidth / Math.max(1, fontSize * em)));
-  const words = trimmed.split(/\s+/);
-  let lines = 1;
-  let column = 0;
-  for (const word of words) {
-    const width = Math.max(1, word.length);
-    const extra = width > charsPerLine ? Math.ceil(width / charsPerLine) - 1 : 0;
-    if (column === 0) {
-      column = Math.min(width, charsPerLine);
-      lines += extra;
-      continue;
-    }
-    if (column + 1 + width <= charsPerLine) {
-      column += 1 + width;
-      continue;
-    }
-    lines += 1 + extra;
-    column = Math.min(width, charsPerLine);
+  return wrapNote(text, fontSize, maxWidth, rhythm).length;
+}
+
+function noteAtoms(text: string, columns: number): NoteAtom[] {
+  const atoms: NoteAtom[] = [];
+  for (const word of text.split(/\s+/)) {
+    if (!word) continue;
+    const pieces = word.length <= columns ? [word] : evenPieces(word, columns);
+    pieces.forEach((piece, index) => {
+      atoms.push({ text: piece, spaceBefore: index === 0 && atoms.length > 0 });
+    });
   }
+  return atoms;
+}
+
+function evenPieces(word: string, columns: number): string[] {
+  const count = Math.max(1, Math.ceil(word.length / columns));
+  const size = Math.ceil(word.length / count);
+  const pieces: string[] = [];
+  for (let index = 0; index < word.length; index += size) pieces.push(word.slice(index, index + size));
+  return pieces;
+}
+
+function renderAtoms(atoms: NoteAtom[]): string {
+  let line = '';
+  for (const atom of atoms) {
+    if (line && atom.spaceBefore) line += ' ';
+    line += atom.text;
+  }
+  return line;
+}
+
+function packAtoms(atoms: NoteAtom[], columns: number): NoteAtom[][] {
+  const lines: NoteAtom[][] = [];
+  let current: NoteAtom[] = [];
+  for (const atom of atoms) {
+    const candidate = current.concat(atom);
+    if (current.length > 0 && renderAtoms(candidate).length > columns) {
+      lines.push(current);
+      current = [{ text: atom.text, spaceBefore: false }];
+      continue;
+    }
+    current = candidate;
+  }
+  if (current.length) lines.push(current);
   return lines;
+}
+
+function fillLastLine(lines: string[], columns: number): string[] {
+  const rows = lines.map((line) => line.split(' ').filter(Boolean));
+  const minimum = Math.ceil(columns * RUNT_RATIO);
+  const width = (words: string[]) => words.join(' ').length;
+  while (rows.length > 1 && width(rows[rows.length - 1]) < minimum) {
+    const previous = rows[rows.length - 2];
+    if (previous.length === 0) {
+      rows.splice(rows.length - 2, 1);
+      continue;
+    }
+    const word = previous[previous.length - 1];
+    const candidate = [word, ...rows[rows.length - 1]];
+    if (width(candidate) > columns) break;
+    previous.pop();
+    rows[rows.length - 1] = candidate;
+    if (previous.length === 0) rows.splice(rows.length - 2, 1);
+  }
+  return rows.filter((row) => row.length > 0).map((row) => row.join(' '));
 }
 
 export interface PosterNoteLayout {

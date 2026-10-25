@@ -3,7 +3,7 @@ import { exampleMoment, EXAMPLE_INSTANT } from '../data/moment';
 import type { SensorSample } from '../data/telemetry';
 import { contrastRatio } from '../color/contrast';
 import { PRESETS, presetById, styleFromPreset } from '../style/presets';
-import { noteFontSize, noteRhythm, wrappedLineCount } from './note';
+import { noteColumns, noteFontSize, noteRhythm, wrapNote, wrappedLineCount } from './note';
 import { randomStyle } from '../style/randomize';
 import { buildScene, footerBlockHeight, quietStackHeight, type FitStackNode, type FooterNode, type QuietBlock, type QuietNode } from './scene';
 
@@ -74,7 +74,8 @@ describe('preset compositions', () => {
     ]);
     expect(scene.background).toBe('#F7E4E1');
     const mark = scene.nodes.find((node) => node.kind === 'mark');
-    expect(mark && mark.kind === 'mark' && mark.left).toBe(0);
+    expect(mark && mark.kind === 'mark' && mark.left).toBe(quiet.left);
+    expect(mark && mark.kind === 'mark' && mark.right).toBe(quiet.right);
   });
 
   it('speaks the evening on the Instrument poster', () => {
@@ -302,6 +303,15 @@ function noteBlock(quiet: QuietNode): QuietBlock | undefined {
   return quiet.blocks.find((block) => block.kind === 'note' || (block.kind === 'text' && block.wrap));
 }
 
+function expectBalancedNote(text: string, fontSize: number, maxWidth: number, rhythm: ReturnType<typeof noteRhythm>, label: string) {
+  const lines = wrapNote(text, fontSize, maxWidth, rhythm);
+  expect(lines.join(' '), label).toBe(text.trim());
+  if (lines.length <= 1) return;
+  const last = lines[lines.length - 1];
+  const minimum = Math.ceil(noteColumns(fontSize, maxWidth, rhythm) * 0.4);
+  expect(last.length, `${label} “${last}”`).toBeGreaterThanOrEqual(minimum);
+}
+
 describe('note measure', () => {
   it('uses a 200-character sentence', () => {
     expect(NOTE_60.length).toBeGreaterThanOrEqual(55);
@@ -385,6 +395,54 @@ describe('note measure', () => {
   it('steps a short note above the long-note floor', () => {
     expect(noteFontSize(NOTE_60.length, 32)).toBeGreaterThan(noteFontSize(NOTE_200.length, 32));
     expect(noteFontSize(NOTE_200.length, 46)).toBe(28);
+  });
+
+  it('balances Peter’s 200-character note on every preset and alignment', () => {
+    const peter = 'This is a test of the 200 chars. '.repeat(10).slice(0, 200);
+    expect(peter).toHaveLength(200);
+    expect(peter.endsWith('Th')).toBe(true);
+    for (const preset of PRESETS) {
+      for (const align of ['left', 'center', 'right'] as const) {
+        const style = { ...styleFromPreset(preset), align };
+        const scene = buildScene(style, moment, peter);
+        const quiet = scene.nodes.find((node) => node.kind === 'quiet') as QuietNode | undefined;
+        const footer = scene.nodes.find((node) => node.kind === 'footer') as FooterNode | undefined;
+        const mark = scene.nodes.find((node) => node.kind === 'mark');
+        if (quiet) {
+          const note = noteBlock(quiet);
+          if (note && (note.kind === 'note' || note.kind === 'text')) {
+            expectBalancedNote(note.text, note.fontSize, note.maxWidth ?? 0, noteRhythm(note.font.family), `${preset.id} ${align}`);
+          }
+          if (mark && mark.kind === 'mark') {
+            expect(mark.left, `${preset.id} mark`).toBe(quiet.left);
+            expect(mark.right, `${preset.id} mark`).toBe(quiet.right);
+            expect(mark.left, `${preset.id} mark`).toBeGreaterThan(0);
+          }
+        }
+        if (footer?.message) {
+          expectBalancedNote(
+            footer.message.text,
+            footer.message.fontSize,
+            footer.message.maxWidth ?? scene.width - footer.left - footer.right,
+            noteRhythm(footer.message.font.family),
+            `${preset.id} ${align}`,
+          );
+          expect(footer.left, preset.id).toBeGreaterThanOrEqual(64);
+          expect(footer.right, preset.id).toBeGreaterThanOrEqual(64);
+        }
+      }
+    }
+  });
+
+  it('breaks one word longer than the measure without a short tail', () => {
+    const word = 'A'.repeat(80);
+    const maxWidth = 28 * 0.6 * 34;
+    const lines = wrapNote(word, 28, maxWidth, 'mono');
+    const columns = noteColumns(28, maxWidth, 'mono');
+    expect(lines.length).toBeGreaterThan(1);
+    expect(lines.join('')).toBe(word);
+    for (const line of lines) expect(line.length).toBeLessThanOrEqual(columns);
+    expect(lines[lines.length - 1].length).toBeGreaterThanOrEqual(Math.ceil(columns * 0.4));
   });
 
   it('gives a condensed random face a wrapping mono note that still fits', () => {
