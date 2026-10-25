@@ -1,7 +1,7 @@
 {
   "name": "Transient",
   "short_name": "Transient",
-  "description": "Mark where and when you are.",
+  "description": "Measure the moment.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
