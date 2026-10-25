@@ -3,7 +3,7 @@ import { exampleMoment, EXAMPLE_INSTANT } from '../data/moment';
 import type { SensorSample } from '../data/telemetry';
 import { styleFromPreset, presetById } from '../style/presets';
 import type { Scene } from '../composition/scene';
-import { makeRecord } from './record';
+import { makeRecord, sharesForCapture } from './record';
 
 const sensors: SensorSample = {
   acceleration: { x: 0.12, y: 9.81, z: -0.04 },
@@ -16,6 +16,15 @@ const sensors: SensorSample = {
 const scene: Scene = { width: 1080, height: 1080, background: '#fff', nodes: [] };
 
 describe('transient record', () => {
+  it('keeps a recipient only when a name was given', () => {
+    expect(sharesForCapture('   ')).toEqual([]);
+    const named = sharesForCapture('  Ada  ', new Date('2026-10-25T01:00:00Z'));
+    expect(named).toHaveLength(1);
+    expect(named[0].recipient).toBe('Ada');
+    expect(named[0].channel).toBe('share');
+    expect(named[0].at).toBe('2026-10-25T01:00:00.000Z');
+  });
+
   it('keeps the captured telemetry for the map', () => {
     const style = styleFromPreset(presetById('09'));
     style.measurements = { ...style.measurements, telemetry: true };

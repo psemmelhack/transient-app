@@ -31,18 +31,6 @@ export async function sharePng(blob: Blob, filename: string): Promise<'shared' |
   }
 }
 
-/** System share sheet when the browser can share a file. Otherwise download the image. */
-export async function deliverImage(
-  blob: Blob,
-  filename: string,
-  download: (blob: Blob, filename: string) => void,
-): Promise<'shared' | 'cancelled' | 'downloaded'> {
-  const result = await sharePng(blob, filename);
-  if (result === 'shared' || result === 'cancelled') return result;
-  download(blob, filename);
-  return 'downloaded';
-}
-
 /**
  * Capture puts the image where a phone can add it to Photos.
  * When the browser can share a file, this opens the system sheet with that file alone.

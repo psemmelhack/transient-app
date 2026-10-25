@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { fileNameFor } from '../export/download';
-import { deliverImage, saveImage, sharePng, webSharePayload } from './share';
+import { saveImage, sharePng, webSharePayload } from './share';
 
 const filename = '38.261602_-122.048768_20261024T041839Z.png';
 
@@ -46,32 +46,6 @@ describe('share payload', () => {
   it('builds a file-only payload', () => {
     const file = new File(['png'], filename, { type: 'image/png' });
     expect(webSharePayload(file)).toEqual({ files: [file] });
-  });
-
-  it('downloads the image when file sharing is unavailable', async () => {
-    const downloads: string[] = [];
-    vi.stubGlobal('navigator', {});
-    const result = await deliverImage(new Blob(['png'], { type: 'image/png' }), filename, (_blob, name) => {
-      downloads.push(name);
-    });
-    expect(result).toBe('downloaded');
-    expect(downloads).toEqual([filename]);
-  });
-
-  it('does not download when the system sheet is cancelled', async () => {
-    const downloads: string[] = [];
-    vi.stubGlobal('document', { title: 'Transient' });
-    vi.stubGlobal('navigator', {
-      canShare: () => true,
-      share: async () => {
-        throw new DOMException('cancelled', 'AbortError');
-      },
-    });
-    const result = await deliverImage(new Blob(['png'], { type: 'image/png' }), filename, () => {
-      downloads.push('no');
-    });
-    expect(result).toBe('cancelled');
-    expect(downloads).toEqual([]);
   });
 
   it('saves through the system sheet with the image file alone', async () => {
@@ -139,21 +113,4 @@ describe('share payload', () => {
     expect(downloads).toEqual([]);
   });
 
-  it('does not download when the system sheet takes the file', async () => {
-    const downloads: string[] = [];
-    const seen: unknown[] = [];
-    vi.stubGlobal('document', { title: 'Transient' });
-    vi.stubGlobal('navigator', {
-      canShare: () => true,
-      share: async (data: unknown) => {
-        seen.push(data);
-      },
-    });
-    const result = await deliverImage(new Blob(['png'], { type: 'image/png' }), filename, () => {
-      downloads.push('no');
-    });
-    expect(result).toBe('shared');
-    expect(downloads).toEqual([]);
-    expect(Object.keys(seen[0] as object)).toEqual(['files']);
-  });
 });

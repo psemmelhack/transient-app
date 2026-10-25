@@ -49,7 +49,7 @@ export function MakeScreen({ onMap, fixture = false }: { onMap: () => void; fixt
         style={{ marginTop: 16, borderBottomWidth: 1, borderBottomColor: line, fontFamily: uiFamily, fontSize: 17, color: ink, paddingVertical: 8 }}
       />
       <Pressable accessibilityLabel={captureLabel} onPress={() => void onSave()} style={{ marginTop: 12, minHeight: 44, justifyContent: 'center' }}>
-        <Text style={{ fontFamily: uiFamily, fontWeight: '500', fontSize: 15, color: ink }}>{captureLabel}</Text>
+        <Text style={{ fontFamily: uiFamily, fontWeight: '500', fontSize: 14, color: ink }}>{captureLabel}</Text>
       </Pressable>
       <Text style={{ fontFamily: uiFamily, color: muted, marginTop: 8 }}>{notice}</Text>
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 16 }}>
