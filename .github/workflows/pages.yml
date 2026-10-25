@@ -36,7 +36,7 @@ jobs:
       - name: Export web
         run: npx expo export --platform web
 
-      - name: Base path and SPA fallback
+      - name: Root path and SPA fallback
         run: node scripts/prepare-pages.mjs
 
       - name: Upload Pages artifact

@@ -17,13 +17,13 @@ Native projects are wired (`npm run ios`, `npm run android`) but image export an
 
 ## Site
 
-https://psemmelhack.github.io/transient-app/
+https://transient.notarist.art/
 
-Pushes to `main` run `.github/workflows/pages.yml`, which installs dependencies, runs the tests, exports the web app with `npx expo export --platform web`, and deploys `dist/` to GitHub Pages. `experiments.baseUrl` in `app.json` is `/transient-app`, so the exported bundle and assets are requested under that path. Fonts, icons, the manifest, and the service worker use paths relative to the page, and `scripts/prepare-pages.mjs` adds `<base href="/transient-app/">` and copies `index.html` to `404.html` so a direct visit still loads the app. The manifest `start_url` and `scope` are `./`, which resolve to `/transient-app/` when the manifest is served from the project site.
+Pushes to `main` run `.github/workflows/pages.yml`, which installs dependencies, runs the tests, exports the web app with `npx expo export --platform web`, and deploys `dist/` to GitHub Pages. `experiments.baseUrl` in `app.json` is empty, so the bundle and assets are requested from the domain root. Fonts, icons, the manifest, and the service worker use paths relative to the page. `scripts/prepare-pages.mjs` adds `<base href="/">`, copies `index.html` to `404.html` so a direct visit still loads the app, and writes `CNAME` for `transient.notarist.art`. The manifest `start_url` and `scope` are `./`.
 
 The published site is HTTPS, so the browser can share your location. The page includes `<meta name="robots" content="noindex, nofollow">`, and `robots.txt` disallows all crawlers.
 
-`npx expo start --web` still opens the app at `/` on the dev server. The base path applies to the export.
+`npx expo start --web` opens the app at `/` on the dev server.
 
 ## Architecture
 
