@@ -21,7 +21,7 @@ https://transient.notarist.art/
 
 Pushes to `main` run `.github/workflows/pages.yml`, which installs dependencies, runs the tests, exports the web app with `npx expo export --platform web`, and deploys `dist/` to GitHub Pages. `experiments.baseUrl` in `app.json` is empty, so the bundle and assets are requested from the domain root. Fonts, icons, the manifest, and the service worker use paths relative to the page. `scripts/prepare-pages.mjs` adds `<base href="/">`, copies `index.html` to `404.html` so a direct visit still loads the app, and writes `CNAME` for `transient.notarist.art`. The manifest `start_url` and `scope` are `./`.
 
-The published site is HTTPS, so the browser can share your location. The page includes `<meta name="robots" content="noindex, nofollow">`, which keeps it out of search results. `robots.txt` allows fetches, so iMessage, Slack, X, and the other link-preview bots can read the page and `https://transient.notarist.art/og.png`. The card title is Transient and the description is “Mark where and when you are.” `node tools/render-og.mjs` redraws that image.
+The published site is HTTPS, so the browser can share your location. The page includes `<meta name="robots" content="noindex, nofollow">`, which keeps it out of search results. `robots.txt` allows fetches, so iMessage, Slack, X, and the other link-preview bots can read the page and `https://transient.notarist.art/og.png`. The card title is Transient and the description is “Measure the moment.” `node tools/render-og.mjs` redraws that image.
 
 `npx expo start --web` opens the app at `/` on the dev server.
 

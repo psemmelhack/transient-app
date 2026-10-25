@@ -21,9 +21,10 @@ describe('pages export', () => {
   it('ships the link-preview tags in the html template', () => {
     const { html, robots, ogWidth, ogHeight, pngSignature, touchWidth, touchHeight } = readLinkPreview();
     expect(html).toContain('<title>Transient</title>');
-    expect(html).toContain('<meta name="description" content="Mark where and when you are." />');
+    expect(html).toContain('<meta name="description" content="Measure the moment." />');
     expect(html).toContain('<meta property="og:title" content="Transient" />');
-    expect(html).toContain('<meta property="og:description" content="Mark where and when you are." />');
+    expect(html).toContain('<meta property="og:description" content="Measure the moment." />');
+    expect(html).toContain('<meta name="twitter:description" content="Measure the moment." />');
     expect(html).toContain('<meta property="og:url" content="https://transient.notarist.art/" />');
     expect(html).toContain('<meta property="og:type" content="website" />');
     expect(html).toContain('<meta property="og:image" content="https://transient.notarist.art/og.png" />');
