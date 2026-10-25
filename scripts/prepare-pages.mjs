@@ -10,6 +10,23 @@ export function readShippedCname() {
   return readFileSync(new URL('../public/CNAME', import.meta.url), 'utf8').trim();
 }
 
+/** Static files the link card is built from. Dimensions come from the PNG header. */
+export function readLinkPreview() {
+  const html = readFileSync(new URL('../public/index.html', import.meta.url), 'utf8');
+  const robots = readFileSync(new URL('../public/robots.txt', import.meta.url), 'utf8');
+  const png = readFileSync(new URL('../public/og.png', import.meta.url));
+  const touch = readFileSync(new URL('../public/icons/apple-touch-icon.png', import.meta.url));
+  return {
+    html,
+    robots,
+    ogWidth: png.readUInt32BE(16),
+    ogHeight: png.readUInt32BE(20),
+    pngSignature: png[0],
+    touchWidth: touch.readUInt32BE(16),
+    touchHeight: touch.readUInt32BE(20),
+  };
+}
+
 /** Point the exported page at the domain root and keep it out of search indexes. */
 export function prepareHtml(html) {
   let next = html;
