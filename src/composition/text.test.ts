@@ -35,7 +35,7 @@ describe('poster clock', () => {
 
   it('reads the formatted 24-hour string when those parts are empty too', () => {
     const expected = quietLine();
-    Intl.DateTimeFormat.prototype.formatToParts = function () {
+    Intl.DateTimeFormat.prototype.formatToParts = function (date?: number | Date) {
       const options = this.resolvedOptions();
       if (options.hourCycle === 'h23') {
         return [
@@ -44,7 +44,7 @@ describe('poster clock', () => {
           { type: 'minute', value: '' },
         ];
       }
-      return originalParts.call(this).filter((part) => part.type !== 'hour' && part.type !== 'minute');
+      return originalParts.call(this, date).filter((part) => part.type !== 'hour' && part.type !== 'minute');
     };
     expect(quietLine()).toBe(expected);
   });
