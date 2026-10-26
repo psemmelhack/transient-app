@@ -58,30 +58,108 @@ interface Parts {
   timeZoneName: string;
 }
 
-function localParts(date: Date, timeZone: string): Parts {
-  const parts = new Intl.DateTimeFormat('en-US', {
-    timeZone,
-    weekday: 'long',
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-    hour12: true,
-    timeZoneName: 'short',
-  }).formatToParts(date);
+function bagOf(parts: { type: string; value: string }[]): Record<string, string> {
   const bag: Record<string, string> = {};
-  for (const p of parts) {
-    if (p.type !== 'literal') bag[p.type] = p.value;
+  for (const part of parts) {
+    if (part.type !== 'literal' && bag[part.type] == null) bag[part.type] = part.value;
+  }
+  return bag;
+}
+
+function digits(value: string | undefined): string | null {
+  const match = value?.match(/\d+/);
+  return match ? match[0] : null;
+}
+
+function hour12From24(hour24: number, minute: string): { hour: string; minute: string; dayPeriod: string } {
+  return {
+    hour: String(hour24 % 12 || 12),
+    minute: minute.padStart(2, '0'),
+    dayPeriod: hour24 >= 12 ? 'PM' : 'AM',
+  };
+}
+
+/**
+ * iOS WKWebView drops the hour and minute from hour12 formatToParts (the colon stays).
+ * A 24-hour reading still includes them, and format() does too when the parts do not.
+ */
+function clockFrom24Hour(date: Date, timeZone: string): { hour: string; minute: string; dayPeriod: string } | null {
+  let hour: string | null = null;
+  let minute: string | null = null;
+  try {
+    const bag = bagOf(
+      new Intl.DateTimeFormat('en-US', {
+        timeZone,
+        hour: '2-digit',
+        minute: '2-digit',
+        hourCycle: 'h23',
+      }).formatToParts(date),
+    );
+    hour = digits(bag.hour);
+    minute = digits(bag.minute);
+  } catch {
+    hour = null;
+  }
+  if (hour == null || minute == null) {
+    try {
+      const text = new Intl.DateTimeFormat('en-US', {
+        timeZone,
+        hour: '2-digit',
+        minute: '2-digit',
+        hourCycle: 'h23',
+      }).format(date);
+      const match = text.match(/(\d{1,2})\D(\d{2})/);
+      if (match) {
+        hour = match[1];
+        minute = match[2];
+      }
+    } catch {
+      return null;
+    }
+  }
+  if (hour == null || minute == null) return null;
+  const hour24 = Number(hour);
+  if (!Number.isFinite(hour24)) return null;
+  return hour12From24(hour24, minute);
+}
+
+function localParts(date: Date, timeZone: string): Parts {
+  let parts: { type: string; value: string }[] = [];
+  try {
+    parts = new Intl.DateTimeFormat('en-US', {
+      timeZone,
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true,
+      timeZoneName: 'short',
+    }).formatToParts(date);
+  } catch {
+    parts = [];
+  }
+  const bag = bagOf(parts);
+  let hour = bag.hour ?? '';
+  let minute = bag.minute ?? '';
+  let dayPeriod = bag.dayPeriod ?? '';
+  if (!digits(hour) || !digits(minute)) {
+    const filled = clockFrom24Hour(date, timeZone);
+    if (filled) {
+      hour = filled.hour;
+      minute = filled.minute;
+      if (!dayPeriod.trim()) dayPeriod = filled.dayPeriod;
+    }
   }
   return {
     weekday: bag.weekday ?? '',
     year: bag.year ?? '',
     month: bag.month ?? '',
     day: bag.day ?? '',
-    hour: bag.hour ?? '',
-    minute: bag.minute ?? '',
-    dayPeriod: bag.dayPeriod ?? '',
+    hour,
+    minute,
+    dayPeriod,
     timeZoneName: bag.timeZoneName ?? '',
   };
 }

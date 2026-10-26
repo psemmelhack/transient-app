@@ -18,6 +18,13 @@ export function isNativeShell(): boolean {
   return typeof bridge()?.postMessage === 'function';
 }
 
+/**
+ * Expo Go floats its own dev-tools button, a circle about 70px across, over the top-right of the page.
+ * The page cannot remove it. Headers inside the shell keep their right-hand controls clear of that circle.
+ * A browser tab does not use this padding.
+ */
+export const SHELL_HEADER_PADDING_RIGHT = 'max(88px, env(safe-area-inset-right))';
+
 export function postToNative(message: WebCommand): void {
   bridge()?.postMessage(JSON.stringify({ source: WEB_SOURCE, ...message }));
 }

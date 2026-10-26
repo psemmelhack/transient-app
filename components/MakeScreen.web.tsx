@@ -19,7 +19,8 @@ import { CompositionStage } from './CompositionStage';
 import { Icon } from './Icons';
 import { Parameters } from './Parameters';
 import { useStyle } from './StyleContext';
-import { captureLabel, capturedToast, savedToDownloads, sharedWithLabel } from '../src/ui/actions';
+import { captureLabel, capturedToast, libraryMissToast, savedToDownloads, sharedWithLabel } from '../src/ui/actions';
+import { isNativeShell, SHELL_HEADER_PADDING_RIGHT } from '../src/native/shell';
 import { ink, line, muted, paper, ui } from './theme';
 
 const NOTE_LIMIT = 200;
@@ -195,16 +196,21 @@ export function MakeScreen({ onMap, fixture = false }: { onMap: () => void; fixt
       produced = true;
       const delivered = await saveImage(rendered.png, captureFileName(frozen.at, frozen.timezone), downloadBlob, presentImage);
       if (delivered === 'cancelled') return;
-      await saveTransient(
-        makeRecord({
-          moment: frozen,
-          style,
-          message: note,
-          scene: rendered.scene,
-          png: rendered.png,
-          shares: sharesForCapture(delivered === 'saved' ? '' : sharedWith),
-        }),
-      );
+      try {
+        await saveTransient(
+          makeRecord({
+            moment: frozen,
+            style,
+            message: note,
+            scene: rendered.scene,
+            png: rendered.png,
+            shares: sharesForCapture(delivered === 'saved' ? '' : sharedWith),
+          }),
+        );
+      } catch {
+        setToast(libraryMissToast);
+        return;
+      }
       setSharedWith('');
       setToast(delivered === 'downloads' ? savedToDownloads : capturedToast);
     } catch {
@@ -222,7 +228,7 @@ export function MakeScreen({ onMap, fixture = false }: { onMap: () => void; fixt
       <style>{chromeCss}</style>
       <div ref={scrollerRef} onScroll={onScroll} style={scrollerStyle}>
         <div ref={pinRef} style={{ ...pinStyle, height: box.pinHeight }}>
-          <header style={headerStyle}>
+          <header style={isNativeShell() ? { ...headerStyle, paddingRight: SHELL_HEADER_PADDING_RIGHT } : headerStyle}>
             <div style={{ fontFamily: ui, fontWeight: 500, fontSize: 20, letterSpacing: '0.04em' }}>Transient</div>
             <div style={{ display: 'flex', alignItems: 'center' }}>
               <button type="button" aria-label="Undo" onClick={undo} style={{ ...iconBtn, opacity: canUndo ? 1 : 0, pointerEvents: canUndo ? 'auto' : 'none' }}>

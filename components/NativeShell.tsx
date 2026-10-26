@@ -1,15 +1,19 @@
 import { useCallback, useEffect, useRef, useState, type ComponentType, type Ref } from 'react';
 import { View } from 'react-native';
 import WebViewModule, { type WebViewMessageEvent } from 'react-native-webview';
-import * as FileSystem from 'expo-file-system';
+import * as LegacyFileSystem from 'expo-file-system/legacy';
 import * as Location from 'expo-location';
 import * as Sharing from 'expo-sharing';
 import { paper } from './theme';
 import { requestNativeTelemetryPermissions } from '../src/location/nativePermissions';
 import { useTelemetry } from '../src/location/useTelemetry';
 import {
+  joinedCapture,
   parseWebMessage,
+  pushCaptureChunk,
+  startCapture,
   type CaptureHandoff,
+  type PendingCapture,
   type ShellLocation,
   type ShellLocationDetail,
   type ShellPlace,
@@ -45,20 +49,6 @@ type ShellWebViewHandle = { injectJavaScript: (script: string) => void };
 
 const WebView = WebViewModule as unknown as ComponentType<ShellWebViewProps>;
 
-interface CacheFile {
-  exists: boolean;
-  uri: string;
-  delete(): void;
-  create(): void;
-  write(content: Uint8Array): Promise<void>;
-}
-
-const FileCtor = FileSystem.File as unknown as new (directory: unknown, name: string) => CacheFile;
-
-function cacheFile(name: string): CacheFile {
-  return new FileCtor(FileSystem.Paths.cache, name);
-}
-
 function script(body: string): string {
   return `(() => { ${body} })(); true;`;
 }
@@ -74,11 +64,24 @@ function safePngName(name: string): string {
   return cleaned.toLowerCase().endsWith('.png') ? cleaned : `${cleaned}.png`;
 }
 
-function decodeBase64(value: string): Uint8Array {
-  const binary = globalThis.atob(value);
-  const out = new Uint8Array(binary.length);
-  for (let index = 0; index < binary.length; index++) out[index] = binary.charCodeAt(index);
-  return out;
+/**
+ * Write the PNG with the legacy cache API and share that URI.
+ * Expo Go is a scoped app. Sharing only grants read when the path is a prefix of the
+ * cache directory it already knows. The new File API’s URI misses that prefix
+ * (`/var` versus `/private/var`, or a path that falls through to the experience-data
+ * rule), so shareAsync throws FilePermissionException and the page shows “Couldn’t share”.
+ */
+async function shareBase64(filename: string, pngBase64: string): Promise<void> {
+  const dir = LegacyFileSystem.cacheDirectory;
+  if (!dir || !pngBase64) throw new Error('cache');
+  const uri = `${dir}${safePngName(filename)}`;
+  await LegacyFileSystem.writeAsStringAsync(uri, pngBase64, { encoding: 'base64' });
+  try {
+    if (!(await Sharing.isAvailableAsync())) throw new Error('share');
+    await Sharing.shareAsync(uri, { mimeType: 'image/png', UTI: 'public.png' });
+  } finally {
+    await LegacyFileSystem.deleteAsync(uri, { idempotent: true }).catch(() => undefined);
+  }
 }
 
 async function placeFor(latitude: number, longitude: number, cache: { key: string; place: ShellPlace | null } | null): Promise<{ cache: { key: string; place: ShellPlace | null }; place: ShellPlace | null }> {
@@ -120,6 +123,7 @@ export function NativeShell() {
   const lastTelemetry = useRef<string | null>(null);
   const placeCache = useRef<{ key: string; place: ShellPlace | null } | null>(null);
   const watch = useRef<Location.LocationSubscription | null>(null);
+  const captures = useRef(new Map<string, PendingCapture>());
   const [page, setPage] = useState<Page | null>(null);
   const [baseUrl, setBaseUrl] = useState<string | null>(null);
   const [telemetryOn, setTelemetryOn] = useState(false);
@@ -227,15 +231,30 @@ export function NativeShell() {
       setTelemetryOn(message.enabled);
       return;
     }
+    if (message.type === 'capture-begin') {
+      const pending = startCapture(message.id, message.filename, message.count);
+      if (!pending) {
+        finishCapture(message.id, 'failed');
+        return;
+      }
+      captures.current.set(message.id, pending);
+      return;
+    }
+    if (message.type === 'capture-chunk') {
+      const pending = captures.current.get(message.id);
+      if (!pending) return;
+      captures.current.set(message.id, pushCaptureChunk(pending, message.index, message.data));
+      return;
+    }
+    if (message.type !== 'capture' && message.type !== 'capture-end') return;
+    const pending = message.type === 'capture-end' ? captures.current.get(message.id) : null;
+    if (message.type === 'capture-end') captures.current.delete(message.id);
     try {
-      const bytes = decodeBase64(message.pngBase64);
-      const file = cacheFile(safePngName(message.filename));
-      if (file.exists) file.delete();
-      file.create();
-      await file.write(bytes);
-      if (!(await Sharing.isAvailableAsync())) throw new Error('share');
+      const pngBase64 = message.type === 'capture' ? message.pngBase64 : pending ? joinedCapture(pending) : null;
+      const filename = message.type === 'capture' ? message.filename : pending?.filename;
+      if (!pngBase64 || !filename) throw new Error('incomplete');
       // The sheet resolves on dismiss. Save and Cancel are not separate results.
-      await Sharing.shareAsync(file.uri, { mimeType: 'image/png', UTI: 'public.png' });
+      await shareBase64(filename, pngBase64);
       finishCapture(message.id, 'shared');
     } catch {
       finishCapture(message.id, 'failed');

@@ -2,6 +2,7 @@
 export const captureLabel = 'Capture';
 export const sharedWithLabel = 'Shared with (optional)';
 export const capturedToast = 'Captured';
+export const libraryMissToast = 'Couldn’t keep it in My transients';
 export const savedToDownloads = 'Saved to Downloads';
 export const capturedUnshared = 'Captured · not shared';
 export const capturedToPhotos = 'Captured to Photos';
