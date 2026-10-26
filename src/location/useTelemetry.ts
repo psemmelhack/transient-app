@@ -8,6 +8,7 @@ import {
   type SensorSample,
   type TelemetryLocationOverride,
 } from '../data/telemetry';
+import { isNativeShell, NATIVE_TELEMETRY_EVENT, postToNative } from '../native/shell';
 
 const FLUSH_MS = 250;
 
@@ -53,6 +54,11 @@ export function useTelemetry(enabled: boolean): TelemetryLive {
   const [pass, setPass] = useState(0);
 
   useEffect(() => onTelemetryPermission(() => setPass((value) => value + 1)), []);
+
+  useEffect(() => {
+    if (!isNativeShell()) return;
+    postToNative({ type: 'telemetry', enabled });
+  }, [enabled]);
 
   const capture = useCallback(() => {
     if (!enabled) return { sensors: null, location: null };
@@ -104,8 +110,13 @@ export function useTelemetry(enabled: boolean): TelemetryLive {
       latest.current = frame;
     };
 
-    window.addEventListener('devicemotion', onMotion);
-    window.addEventListener('deviceorientation', onOrientation);
+    const shell = isNativeShell();
+    if (!shell) {
+      window.addEventListener('devicemotion', onMotion);
+      window.addEventListener('deviceorientation', onOrientation);
+    }
+    const onNativeTelemetry = () => publish();
+    if (shell) window.addEventListener(NATIVE_TELEMETRY_EVENT, onNativeTelemetry);
 
     let battery: { level: number; removeEventListener: (type: string, listener: () => void) => void } | null = null;
     const onLevel = () => {
@@ -115,7 +126,7 @@ export function useTelemetry(enabled: boolean): TelemetryLive {
       latest.current = frame;
     };
     const nav = navigator as Navigator & { getBattery?: () => Promise<{ level: number; addEventListener: (type: string, listener: () => void) => void; removeEventListener: (type: string, listener: () => void) => void }> };
-    if (typeof nav.getBattery === 'function') {
+    if (!shell && typeof nav.getBattery === 'function') {
       nav.getBattery().then((manager) => {
         if (stopped) return;
         battery = manager;
@@ -129,8 +140,11 @@ export function useTelemetry(enabled: boolean): TelemetryLive {
     return () => {
       stopped = true;
       window.clearInterval(id);
-      window.removeEventListener('devicemotion', onMotion);
-      window.removeEventListener('deviceorientation', onOrientation);
+      if (!shell) {
+        window.removeEventListener('devicemotion', onMotion);
+        window.removeEventListener('deviceorientation', onOrientation);
+      }
+      if (shell) window.removeEventListener(NATIVE_TELEMETRY_EVENT, onNativeTelemetry);
       battery?.removeEventListener('levelchange', onLevel);
     };
   }, [enabled, pass]);
@@ -159,7 +173,14 @@ function locationOf(injected: TelemetryInjection): TelemetryLocationOverride | n
 }
 
 function hasReading(sample: SensorSample): boolean {
-  return Boolean(sample.acceleration || sample.rotationRate || sample.orientation || sample.heading != null || sample.battery != null);
+  return Boolean(
+    sample.acceleration ||
+      sample.rotationRate ||
+      sample.orientation ||
+      sample.heading != null ||
+      sample.battery != null ||
+      sample.phone,
+  );
 }
 
 function cloneSample(sample: SensorSample): SensorSample {
@@ -169,6 +190,13 @@ function cloneSample(sample: SensorSample): SensorSample {
     orientation: sample.orientation ? { ...sample.orientation } : null,
     heading: sample.heading,
     battery: sample.battery,
+    phone: sample.phone
+      ? {
+          ...sample.phone,
+          magneticField: sample.phone.magneticField ? { ...sample.phone.magneticField } : null,
+          gravity: sample.phone.gravity ? { ...sample.phone.gravity } : null,
+        }
+      : null,
   };
 }
 
@@ -193,6 +221,7 @@ function quantize(sample: SensorSample): SensorSample {
       : null,
     heading: sample.heading == null ? null : Math.round(sample.heading),
     battery: sample.battery == null ? null : Math.round(sample.battery * 100) / 100,
+    phone: sample.phone ? { ...sample.phone } : null,
   };
 }
 

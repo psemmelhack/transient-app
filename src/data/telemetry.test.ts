@@ -6,6 +6,7 @@ import {
   formatHeading,
   headingFromOrientation,
   phoneLines,
+  posterTelemetryLines,
   readBatteryLevel,
   readMotion,
   readOrientation,
@@ -118,6 +119,10 @@ describe('telemetry lines', () => {
     expect(telemetryLines(moment).map((line) => line.label)).toEqual(['ACC', 'GYRO', 'ORIENT', 'HDG', '±ACC', '±ALT', 'SPD', 'CRS', 'BAT']);
     expect(telemetrySnapshot(true, { ...moment, sensors: { ...sensors, phone } })?.phone?.deviceModel).toBe('iPhone');
     expect(telemetrySnapshot(true, moment)?.phone).toBeUndefined();
+    const poster = posterTelemetryLines({ ...moment, sensors: { ...sensors, phone } });
+    expect(poster.length).toBeLessThanOrEqual(8);
+    expect(poster.map((line) => line.label)).toEqual(['BARO', 'HDG', 'SPD', 'STEPS', '±ALT', 'BAT', 'TRUE', 'CRS']);
+    expect(posterTelemetryLines(moment).map((line) => line.label)).toEqual(['ACC', 'GYRO', 'ORIENT', 'HDG', '±ACC', '±ALT', 'SPD', 'CRS', 'BAT']);
   });
 
   it('stores a snapshot only while telemetry is on', () => {
