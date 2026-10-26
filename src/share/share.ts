@@ -143,10 +143,18 @@ function firefoxDownload(
   return 'downloads';
 }
 
+/** Small enough that WKWebView delivers every piece. A full poster is several of these. */
+const CAPTURE_CHUNK = 48_000;
+
 /** Expo Go draws the PNG in the page and this hands the bytes to the share sheet. */
 async function shareThroughNative(blob: Blob, filename: string): Promise<CaptureDelivery> {
   const id = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
   const pngBase64 = await blobToBase64(blob);
+  const chunks: string[] = [];
+  for (let index = 0; index < pngBase64.length; index += CAPTURE_CHUNK) {
+    chunks.push(pngBase64.slice(index, index + CAPTURE_CHUNK));
+  }
+  if (chunks.length === 0) chunks.push('');
   const status = await new Promise<CaptureHandoff>((resolve) => {
     let stop = () => {};
     const timer = window.setTimeout(() => {
@@ -159,7 +167,9 @@ async function shareThroughNative(blob: Blob, filename: string): Promise<Capture
       stop();
       resolve(detail.status === 'cancelled' || detail.status === 'shared' ? detail.status : 'failed');
     });
-    postToNative({ type: 'capture', id, filename, pngBase64 });
+    postToNative({ type: 'capture-begin', id, filename, count: chunks.length });
+    chunks.forEach((data, index) => postToNative({ type: 'capture-chunk', id, index, data }));
+    postToNative({ type: 'capture-end', id });
   });
   if (status === 'failed') throw new Error('Could not open the share sheet');
   return status;

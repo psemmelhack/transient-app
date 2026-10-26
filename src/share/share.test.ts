@@ -300,6 +300,54 @@ describe('share payload', () => {
     expect(downloads).toEqual([]);
   });
 
+  it('sends the PNG to the shell in pieces and waits for the share sheet', async () => {
+    const posted: Array<Record<string, unknown>> = [];
+    const listeners = new Map<string, Set<(event: Event) => void>>();
+    vi.stubGlobal('window', {
+      ReactNativeWebView: {
+        postMessage(raw: string) {
+          const message = JSON.parse(raw) as Record<string, unknown>;
+          posted.push(message);
+          if (message.type !== 'capture-end') return;
+          const event = new Event('transient-native-capture');
+          Object.assign(event, { detail: { id: message.id, status: 'shared' } });
+          listeners.get('transient-native-capture')?.forEach((listener) => listener(event));
+        },
+      },
+      setTimeout: globalThis.setTimeout.bind(globalThis),
+      clearTimeout: globalThis.clearTimeout.bind(globalThis),
+      addEventListener(type: string, listener: (event: Event) => void) {
+        const set = listeners.get(type) ?? new Set<(event: Event) => void>();
+        set.add(listener);
+        listeners.set(type, set);
+      },
+      removeEventListener(type: string, listener: (event: Event) => void) {
+        listeners.get(type)?.delete(listener);
+      },
+    });
+    const bytes = new Uint8Array(40_000);
+    bytes[0] = 137;
+    bytes[1] = 80;
+    const result = await saveImage(new Blob([bytes], { type: 'image/png' }), captureName, () => {
+      throw new Error('download');
+    });
+    expect(result).toBe('shared');
+    const kinds = posted.map((message) => message.type);
+    expect(kinds[0]).toBe('capture-begin');
+    expect(kinds.at(-1)).toBe('capture-end');
+    const chunks = posted.filter((message) => message.type === 'capture-chunk');
+    expect(chunks.length).toBeGreaterThan(1);
+    expect(posted[0]?.count).toBe(chunks.length);
+    const joined = chunks
+      .slice()
+      .sort((left, right) => Number(left.index) - Number(right.index))
+      .map((message) => String(message.data))
+      .join('');
+    const binary = atob(joined);
+    const decoded = Uint8Array.from(binary, (char) => char.charCodeAt(0));
+    expect(decoded).toEqual(bytes);
+  });
+
   it('on desktop downloads the PNG and does not open a share sheet', async () => {
     const downloads: string[] = [];
     let shared = false;

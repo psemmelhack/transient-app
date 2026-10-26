@@ -6,6 +6,7 @@ import { cssFontShorthand, ensureFonts } from '../src/composition/fontReady';
 import { heroScaleToClear, scaleClearanceBox } from '../src/composition/heroClearance';
 import { noteRhythm, wrapNote } from '../src/composition/note';
 import { beginFit, endFit } from '../src/composition/fitSession';
+import { isNativeShell } from '../src/native/shell';
 import type {
   Align,
   FitStackNode,
@@ -507,6 +508,37 @@ function quietFontSpecs(node: QuietNode): string[] {
   return specs;
 }
 
+/**
+ * The web font’s degree glyph is a raised ring. WKWebView drops that glyph on a
+ * vertically aligned span and draws a hollow bullet from a fallback face instead.
+ * Inside the shell the mark is drawn, so the fallback face never gets a chance.
+ * A browser tab keeps the original span.
+ */
+function DegreeMark() {
+  if (!isNativeShell()) {
+    return <span style={{ fontSize: '0.6em', verticalAlign: '0.55em', marginLeft: '0.02em' }}>°</span>;
+  }
+  return (
+    <span
+      aria-hidden
+      style={{
+        display: 'inline-block',
+        width: '0.22em',
+        height: '0.22em',
+        marginLeft: '0.08em',
+        marginRight: '0.04em',
+        borderWidth: '0.045em',
+        borderStyle: 'solid',
+        borderColor: 'currentColor',
+        borderRadius: 999,
+        boxSizing: 'border-box',
+        position: 'relative',
+        top: '-0.62em',
+      }}
+    />
+  );
+}
+
 function QuietPiece({ block, align }: { block: QuietBlock; align: Align }) {
   if (block.kind === 'rule') {
     return (
@@ -528,9 +560,7 @@ function QuietPiece({ block, align }: { block: QuietBlock; align: Align }) {
         {block.lines.map((line) => (
           <div key={`${line.value}${line.suffix ?? ''}`}>
             {line.value}
-            {line.degree && (
-              <span style={{ fontSize: '0.6em', verticalAlign: '0.55em', marginLeft: '0.02em' }}>°</span>
-            )}
+            {line.degree && <DegreeMark />}
             {line.suffix ? ` ${line.suffix}` : ''}
           </div>
         ))}

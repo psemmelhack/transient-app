@@ -5,6 +5,8 @@ import { capturedUnshared, emptyLibrary, libraryShareLabel } from '../src/ui/act
 import { Icon } from './Icons';
 import { publicAssetUrl } from '../src/web/publicUrl';
 import { ink, line, muted, paper, ui } from './theme';
+import { clusterTransients } from '../src/map/cluster';
+import { isNativeShell, SHELL_HEADER_PADDING_RIGHT } from '../src/native/shell';
 
 const STYLE_URL = 'https://tiles.openfreemap.org/styles/positron';
 
@@ -74,13 +76,58 @@ export function MapScreen({ onBack, active = true }: { onBack: () => void; activ
     if (!map) return;
     const markers: Marker[] = [];
     let cancelled = false;
-    const place = () => {
+    const render = () => {
       if (cancelled) return;
       markers.forEach((marker) => marker.remove());
       markers.length = 0;
-      for (const record of records) {
+      const viewBounds = map.getBounds();
+      const groups = clusterTransients(
+        records.map((record) => ({ id: record.id, longitude: record.longitude, latitude: record.latitude })),
+        {
+          zoom: map.getZoom(),
+          bbox: [viewBounds.getWest(), viewBounds.getSouth(), viewBounds.getEast(), viewBounds.getNorth()],
+        },
+      );
+      for (const group of groups) {
+        if (group.kind === 'cluster') {
+          const size = group.count >= 100 ? 32 : group.count >= 10 ? 26 : 22;
+          const dot = document.createElement('button');
+          dot.type = 'button';
+          dot.dataset.role = 'cluster';
+          dot.textContent = String(group.count);
+          dot.setAttribute('aria-label', `${group.count} transients`);
+          dot.style.width = `${size}px`;
+          dot.style.height = `${size}px`;
+          dot.style.borderRadius = '999px';
+          dot.style.border = 'none';
+          dot.style.padding = '0';
+          dot.style.display = 'inline-flex';
+          dot.style.alignItems = 'center';
+          dot.style.justifyContent = 'center';
+          dot.style.background = ink;
+          dot.style.color = paper;
+          dot.style.boxShadow = '0 0 0 4px rgba(28,27,25,0.12)';
+          dot.style.fontFamily = ui;
+          dot.style.fontWeight = '500';
+          dot.style.fontSize = group.count >= 100 ? '11px' : '12px';
+          dot.style.lineHeight = '1';
+          dot.style.cursor = 'pointer';
+          const marker = new Marker({ element: dot }).setLngLat([group.longitude, group.latitude]).addTo(map);
+          dot.addEventListener('click', (event) => {
+            event.stopPropagation();
+            event.preventDefault();
+            const current = map.getZoom();
+            const zoom = group.expansionZoom > current ? group.expansionZoom : current + 1;
+            map.easeTo({ center: [group.longitude, group.latitude], zoom });
+          });
+          markers.push(marker);
+          continue;
+        }
+        const record = records.find((item) => item.id === group.id);
+        if (!record) continue;
         const dot = document.createElement('button');
         dot.type = 'button';
+        dot.dataset.role = 'pin';
         dot.setAttribute('aria-label', record.placeFull || 'Transient');
         dot.style.width = '12px';
         dot.style.height = '12px';
@@ -94,19 +141,25 @@ export function MapScreen({ onBack, active = true }: { onBack: () => void; activ
         dot.addEventListener('click', () => setSelectedId(record.id));
         markers.push(marker);
       }
+    };
+    const place = () => {
+      if (cancelled) return;
       if (records.length === 1) {
-        map.easeTo({ center: [records[0].longitude, records[0].latitude], zoom: 12 });
+        map.jumpTo({ center: [records[0].longitude, records[0].latitude], zoom: 12 });
       } else if (records.length > 1) {
         const bounds = new LngLatBounds();
         records.forEach((record) => bounds.extend([record.longitude, record.latitude]));
         map.fitBounds(bounds, { padding: 64, maxZoom: 12, duration: 0 });
       }
+      render();
     };
+    map.on('moveend', render);
     if (map.isStyleLoaded()) place();
     else map.once('load', place);
     return () => {
       cancelled = true;
       map.off('load', place);
+      map.off('moveend', render);
       markers.forEach((marker) => marker.remove());
     };
   }, [records, mapReady]);
@@ -134,7 +187,17 @@ export function MapScreen({ onBack, active = true }: { onBack: () => void; activ
   return (
     <div style={{ height: '100%', width: '100%', minWidth: 0, minHeight: 0, display: 'flex', flexDirection: 'column', background: paper, color: ink, fontFamily: ui, fontWeight: 400, overflow: 'hidden' }}>
       <style>{mapCss}</style>
-      <header style={{ height: 56, display: 'flex', alignItems: 'center', gap: 8, padding: '0 12px 0 8px', flex: 'none' }}>
+      <header
+        style={{
+          height: 56,
+          display: 'flex',
+          alignItems: 'center',
+          gap: 8,
+          padding: '0 12px 0 8px',
+          flex: 'none',
+          ...(isNativeShell() ? { paddingRight: SHELL_HEADER_PADDING_RIGHT } : {}),
+        }}
+      >
         <button type="button" aria-label="Back" onClick={onBack} style={backBtn}>
           <Icon name="back" size={20} color={ink} />
         </button>
