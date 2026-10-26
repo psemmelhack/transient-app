@@ -28,6 +28,22 @@ describe('png text metadata', () => {
     expect(read['transient:utc']).toBe('2026-10-23 01:12:07 UTC');
     expect(read['transient:message']).toBe('We were here.');
     expect(read.Software).toBe('Transient');
+    expect(read['transient:telemetry']).toBeUndefined();
+    const withTelemetry = metadataFor({
+      latitude: 33.834452,
+      longitude: -118.383318,
+      altitude: 18,
+      accuracy: null,
+      utc: '2026-10-23 01:12:07 UTC',
+      timezone: 'America/Los_Angeles',
+      message: '',
+      place: null,
+      temperatureC: null,
+      sunAzimuth: null,
+      sunAltitude: null,
+      telemetry: ['BARO  1013.3 hPa', 'HDG  274° W', 'MAG  1  2  3'],
+    });
+    expect(readPngText(insertPngText(png, withTelemetry))['transient:telemetry']).toBe('BARO  1013.3 hPa\nHDG  274° W\nMAG  1  2  3');
     expect(next[0]).toBe(0x89);
     expect(String.fromCharCode(...next.subarray(next.length - 8, next.length - 4))).toBe('IEND');
   });

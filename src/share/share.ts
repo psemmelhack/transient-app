@@ -1,3 +1,6 @@
+import { isNativeShell, NATIVE_CAPTURE_EVENT, onNativeEvent, postToNative } from '../native/shell';
+import type { CaptureHandoff } from '../native/protocol';
+
 /** Share payload is the image alone. No title, text, or url for the compose sheet to show. */
 export function webSharePayload(file: File): { files: File[] } {
   return { files: [file] };
@@ -110,6 +113,7 @@ export async function saveImage(
   download: (blob: Blob, filename: string) => void,
   present?: (blob: Blob, filename: string) => void,
 ): Promise<CaptureDelivery> {
+  if (isNativeShell()) return shareThroughNative(blob, filename);
   if (isFirefoxIos()) return firefoxDownload(blob, filename, download, present);
   if (isAndroidPlatform()) {
     download(blob, filename);
@@ -137,6 +141,38 @@ function firefoxDownload(
   }
   download(blob, filename);
   return 'downloads';
+}
+
+/** Expo Go draws the PNG in the page and this hands the bytes to the share sheet. */
+async function shareThroughNative(blob: Blob, filename: string): Promise<CaptureDelivery> {
+  const id = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+  const pngBase64 = await blobToBase64(blob);
+  const status = await new Promise<CaptureHandoff>((resolve) => {
+    let stop = () => {};
+    const timer = window.setTimeout(() => {
+      stop();
+      resolve('failed');
+    }, 120000);
+    stop = onNativeEvent<{ id?: string; status?: CaptureHandoff }>(NATIVE_CAPTURE_EVENT, (detail) => {
+      if (!detail || detail.id !== id) return;
+      window.clearTimeout(timer);
+      stop();
+      resolve(detail.status === 'cancelled' || detail.status === 'shared' ? detail.status : 'failed');
+    });
+    postToNative({ type: 'capture', id, filename, pngBase64 });
+  });
+  if (status === 'failed') throw new Error('Could not open the share sheet');
+  return status;
+}
+
+async function blobToBase64(blob: Blob): Promise<string> {
+  const bytes = new Uint8Array(await blob.arrayBuffer());
+  let binary = '';
+  const stride = 0x8000;
+  for (let index = 0; index < bytes.length; index += stride) {
+    binary += String.fromCharCode(...bytes.subarray(index, index + stride));
+  }
+  return btoa(binary);
 }
 
 function handoffImage(

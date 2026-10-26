@@ -1,3 +1,5 @@
+import { isNativeShell } from '../native/shell';
+
 /** Phone sensors and GPS extras, frozen with the transient. Missing readings stay null. */
 
 export interface Axis3 {
@@ -240,6 +242,47 @@ export function phoneLines(phone: PhoneTelemetry | null | undefined): TelemetryL
   return lines;
 }
 
+/** Poster lines stay in the small metadata block. The rest is kept for the PNG. */
+export const POSTER_TELEMETRY_CAP = 8;
+
+const POSTER_PRIORITY = [
+  'baro',
+  'hdg',
+  'spd',
+  'steps',
+  'v-acc',
+  'bat',
+  'true',
+  'crs',
+  'h-acc',
+  'acc',
+  'gyro',
+  'orient',
+  'ralt',
+  'bstat',
+  'bright',
+  'mhdg',
+  'net',
+  'model',
+  'mag',
+  'grav',
+  'light',
+];
+
+/**
+ * Lines drawn on the poster.
+ * A browser sample is unchanged. A phone sample is capped so the block stays small.
+ */
+export function posterTelemetryLines(source: TelemetrySource): TelemetryLine[] {
+  const lines = telemetryLines(source);
+  if (!source.sensors?.phone) return lines;
+  const rank = new Map(POSTER_PRIORITY.map((id, index) => [id, index]));
+  return lines
+    .filter((line) => rank.has(line.id))
+    .sort((a, b) => (rank.get(a.id) ?? 0) - (rank.get(b.id) ?? 0))
+    .slice(0, POSTER_TELEMETRY_CAP);
+}
+
 export function telemetryLineText(line: TelemetryLine): string {
   return `${line.label}  ${line.values.join('  ')}`;
 }
@@ -273,6 +316,7 @@ type PermissionConstructor = { requestPermission?: () => Promise<string> };
 
 /** iOS requires this inside the gesture that turns Telemetry on. Both prompts are started together. */
 export async function requestMotionAccess(): Promise<MotionAccess> {
+  if (isNativeShell()) return 'granted';
   const root = globalThis as typeof globalThis & {
     DeviceMotionEvent?: PermissionConstructor;
     DeviceOrientationEvent?: PermissionConstructor;

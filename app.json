@@ -10,18 +10,13 @@
     "splash": {
       "backgroundColor": "#f3f0ea"
     },
-    "owner": "expo-owner",
+    "owner": "psemme",
     "runtimeVersion": {
       "policy": "sdkVersion"
     },
     "updates": {
       "enabled": true,
-      "url": "https://u.expo.dev/00000000-0000-0000-0000-000000000000"
-    },
-    "extra": {
-      "eas": {
-        "projectId": "00000000-0000-0000-0000-000000000000"
-      }
+      "url": "https://u.expo.dev/fc828c9a-1d94-4a4f-8b11-9156e69011b1"
     },
     "ios": {
       "supportsTablet": true,
@@ -72,6 +67,11 @@
       ],
       "expo-sharing",
       "expo-sqlite"
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "fc828c9a-1d94-4a4f-8b11-9156e69011b1"
+      }
+    }
   }
 }

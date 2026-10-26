@@ -9,6 +9,8 @@ import {
   type PlaceInfo,
 } from '../data/moment';
 import { fetchTemperatureC } from '../data/weather';
+import { isNativeShell, NATIVE_LOCATION_EVENT, onNativeEvent, postToNative } from '../native/shell';
+import type { ShellLocationDetail } from '../native/protocol';
 
 export type LocateStatus = 'acquiring' | 'ready';
 
@@ -69,7 +71,42 @@ export function useMoment(fixture: boolean): {
   }, [fixture]);
 
   useEffect(() => {
-    if (fixture) return;
+    if (fixture || !isNativeShell()) return;
+    const stop = onNativeEvent<ShellLocationDetail>(NATIVE_LOCATION_EVENT, (detail) => {
+      if (!detail || detail.status === 'unavailable') {
+        setLoc(exampleLoc());
+        return;
+      }
+      const location = detail.location;
+      if (typeof location?.latitude !== 'number' || typeof location.longitude !== 'number') {
+        setLoc(exampleLoc());
+        return;
+      }
+      setLoc({
+        status: 'ready',
+        source: 'device',
+        latitude: location.latitude,
+        longitude: location.longitude,
+        altitude: finiteOrNull(location.altitude),
+        accuracy: finiteOrNull(location.accuracy),
+        altitudeAccuracy: finiteOrNull(location.altitudeAccuracy),
+        speed: finiteOrNull(location.speed),
+        course: finiteOrNull(location.course),
+        place: location.place ?? null,
+      });
+    });
+    const giveUp = setTimeout(() => {
+      setLoc((prev) => (prev.status === 'acquiring' ? exampleLoc() : prev));
+    }, 9000);
+    postToNative(attempt > 0 ? { type: 'retry-location' } : { type: 'ready' });
+    return () => {
+      clearTimeout(giveUp);
+      stop();
+    };
+  }, [fixture, attempt]);
+
+  useEffect(() => {
+    if (fixture || isNativeShell()) return;
     let cancelled = false;
     let watch: Location.LocationSubscription | null = null;
     setLoc({ status: 'acquiring' });
@@ -125,7 +162,7 @@ export function useMoment(fixture: boolean): {
   }, [fixture, attempt]);
 
   useEffect(() => {
-    if (loc.status !== 'ready' || loc.source !== 'device') return;
+    if (loc.status !== 'ready' || loc.source !== 'device' || loc.place?.full) return;
     let cancelled = false;
     reverseGeocode(loc.latitude, loc.longitude).then((place) => {
       if (cancelled || !place) return;

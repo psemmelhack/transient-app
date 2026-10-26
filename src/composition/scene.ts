@@ -1,6 +1,6 @@
 import { measurementLines, isTelemetryEnabled } from '../data/plugins';
 import { deviceTimeZone, type Moment } from '../data/moment';
-import { omitSupersededAccuracy, telemetryLines, type TelemetryLine } from '../data/telemetry';
+import { omitSupersededAccuracy, posterTelemetryLines, type TelemetryLine } from '../data/telemetry';
 import type { Style } from '../style/types';
 import { FORMATS } from './formats';
 import { getFont, resolveFont, type CssFont, type FontRole } from './fonts';
@@ -239,7 +239,7 @@ function measured(style: Style, moment: Moment) {
 
 function telemetryFor(style: Style, moment: Moment): TelemetryLine[] {
   if (!isTelemetryEnabled(style.measurements)) return [];
-  return telemetryLines(moment);
+  return posterTelemetryLines(moment);
 }
 
 function plexFont(): CssFont {

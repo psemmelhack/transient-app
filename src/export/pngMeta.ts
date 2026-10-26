@@ -118,6 +118,8 @@ export function metadataFor(input: {
   temperatureC: number | null;
   sunAzimuth: number | null;
   sunAltitude: number | null;
+  /** Every telemetry line, including ones the poster leaves out. */
+  telemetry?: string[] | null;
 }): Record<string, string> {
   const fields: Record<string, string> = {
     Software: 'Transient',
@@ -133,5 +135,7 @@ export function metadataFor(input: {
   if (input.temperatureC != null) fields['transient:temperature-c'] = String(input.temperatureC);
   if (input.sunAzimuth != null) fields['transient:sun-azimuth'] = String(Math.round(input.sunAzimuth));
   if (input.sunAltitude != null) fields['transient:sun-altitude'] = input.sunAltitude.toFixed(2);
+  const telemetry = input.telemetry?.map((line) => line.trim()).filter(Boolean) ?? [];
+  if (telemetry.length) fields['transient:telemetry'] = telemetry.join('\n');
   return fields;
 }

@@ -5,6 +5,7 @@ import { captureStage } from '../src/export/capture';
 import { captureFileName, downloadBlob } from '../src/export/download';
 import { saveImage } from '../src/share/share';
 import { insertPngText, metadataFor } from '../src/export/pngMeta';
+import { telemetryLineText, telemetryLines } from '../src/data/telemetry';
 import { previewBox, PIN_HEADER } from '../src/layout/previewSize';
 import { useMoment } from '../src/location/useMoment';
 import { applyTelemetry, useTelemetry, type TelemetryLive } from '../src/location/useTelemetry';
@@ -159,11 +160,12 @@ export function MakeScreen({ onMap, fixture = false }: { onMap: () => void; fixt
           temperatureC: frozen.temperatureC,
           sunAzimuth: sun.azimuth,
           sunAltitude: sun.altitude,
+          telemetry: telemetryLines(frozen).map((line) => telemetryLineText(line)),
         }),
       );
       const copy = new Uint8Array(stamped.byteLength);
       copy.set(stamped);
-      png = new Blob([copy.buffer], { type: 'image/png' });
+      png = new Blob([copy], { type: 'image/png' });
     } catch {
       png = raw.type === 'image/png' ? raw : new Blob([raw], { type: 'image/png' });
     }
