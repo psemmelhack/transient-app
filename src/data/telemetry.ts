@@ -194,8 +194,8 @@ export function telemetryLines(source: TelemetrySource): TelemetryLine[] {
   if (accuracy != null) lines.push({ id: 'h-acc', label: '±ACC', values: [formatMeters(accuracy)] });
   const altitudeAccuracy = finite(source.altitudeAccuracy);
   if (altitudeAccuracy != null) lines.push({ id: 'v-acc', label: '±ALT', values: [formatMeters(altitudeAccuracy)] });
-  const speed = finite(source.speed);
-  if (speed != null) lines.push({ id: 'spd', label: 'SPD', values: [formatSpeed(speed)] });
+  const speedText = formatSpeed(source.speed);
+  if (speedText) lines.push({ id: 'spd', label: 'SPD', values: [speedText] });
   const course = finite(source.course);
   if (course != null) lines.push({ id: 'crs', label: 'CRS', values: [formatHeading(course)] });
   const battery = readBatteryLevel(sensors?.battery);
@@ -297,7 +297,7 @@ export function telemetrySnapshot(enabled: boolean, source: TelemetrySource): Te
     heading: finite(sensors?.heading),
     horizontalAccuracy: finite(source.accuracy),
     altitudeAccuracy: finite(source.altitudeAccuracy),
-    speed: finite(source.speed),
+    speed: groundSpeed(source.speed),
     course: finite(source.course),
     battery: readBatteryLevel(sensors?.battery),
     ...(sensors?.phone ? { phone: sensors.phone } : {}),
@@ -364,8 +364,28 @@ function formatMeters(value: number): string {
   return `\u00b1${Math.round(value)} m`;
 }
 
-function formatSpeed(value: number): string {
-  return `${signed(value, 1)} m/s`;
+/** Geolocation reports meters per second. 1 mph is 1609.344 m / 3600 s. */
+const MPH_PER_MPS = 3600 / 1609.344;
+
+/**
+ * A usable ground speed, in m/s.
+ * Browsers and phones often omit speed, or send −1 when the fix has none.
+ */
+function groundSpeed(value: number | null | undefined): number | null {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) return null;
+  return value;
+}
+
+/**
+ * Speed joins the readout only above 1 mph, in miles per hour.
+ * At or below that, and for a missing or invalid fix, the line is left out.
+ */
+function formatSpeed(value: number | null | undefined): string | null {
+  const speed = groundSpeed(value);
+  if (speed == null) return null;
+  const shown = Number((speed * MPH_PER_MPS).toFixed(1));
+  if (!(shown > 1)) return null;
+  return `${shown.toFixed(1)} mph`;
 }
 
 function formatBattery(level: number): string {

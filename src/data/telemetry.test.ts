@@ -16,6 +16,7 @@ import {
   telemetrySnapshot,
   type PhoneTelemetry,
   type SensorSample,
+  type TelemetrySource,
 } from './telemetry';
 
 const sensors: SensorSample = {
@@ -49,7 +50,7 @@ describe('telemetry lines', () => {
     expect(lines.find((line) => line.id === 'hdg')?.values).toEqual(['274° W']);
     expect(lines.find((line) => line.id === 'h-acc')?.values).toEqual(['±12 m']);
     expect(lines.find((line) => line.id === 'v-acc')?.values).toEqual(['±4 m']);
-    expect(lines.find((line) => line.id === 'spd')?.values).toEqual(['1.4 m/s']);
+    expect(lines.find((line) => line.id === 'spd')?.values).toEqual(['3.0 mph']);
     expect(lines.find((line) => line.id === 'crs')?.values).toEqual(['182° S']);
     expect(lines.find((line) => line.id === 'bat')?.values).toEqual(['81%']);
   });
@@ -73,6 +74,19 @@ describe('telemetry lines', () => {
     expect(telemetryLines(exampleMoment(EXAMPLE_INSTANT))).toEqual([]);
     expect(readBatteryLevel(undefined)).toBeNull();
     expect(readBatteryLevel(1.2)).toBeNull();
+  });
+
+  it('shows speed in mph only when the fix is moving faster than 1 mph', () => {
+    const line = (speed: number | null | undefined) =>
+      telemetryLines({ ...exampleMoment(EXAMPLE_INSTANT), speed } as TelemetrySource).find((item) => item.id === 'spd');
+    expect(line(4.4704)?.values).toEqual(['10.0 mph']);
+    expect(line(0.5)?.values).toEqual(['1.1 mph']);
+    expect(line(1.36)?.values).toEqual(['3.0 mph']);
+    for (const speed of [null, undefined, Number.NaN, Number.POSITIVE_INFINITY, -1, 0, 0.4, 1609.344 / 3600]) {
+      expect(line(speed), String(speed)).toBeUndefined();
+    }
+    expect(telemetrySnapshot(true, { ...moment, speed: -1 })?.speed).toBeNull();
+    expect(telemetrySnapshot(true, { ...moment, speed: 0.4 })?.speed).toBe(0.4);
   });
 
   it('adds phone readings only when the device reported them', () => {
