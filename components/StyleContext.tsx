@@ -18,6 +18,7 @@ export function StyleProvider({ children }: { children: ReactNode }) {
   const [previous, setPrevious] = useState<Style | null>(null);
 
   useEffect(() => {
+    if (typeof window === 'undefined' || typeof window.addEventListener !== 'function') return;
     const onAdopt = (event: Event) => {
       const next = (event as CustomEvent<Style>).detail;
       if (!next) return;

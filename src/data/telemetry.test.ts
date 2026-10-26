@@ -5,6 +5,7 @@ import {
   cardinal,
   formatHeading,
   headingFromOrientation,
+  phoneLines,
   readBatteryLevel,
   readMotion,
   readOrientation,
@@ -12,6 +13,7 @@ import {
   telemetryLines,
   telemetryLineText,
   telemetrySnapshot,
+  type PhoneTelemetry,
   type SensorSample,
 } from './telemetry';
 
@@ -70,6 +72,52 @@ describe('telemetry lines', () => {
     expect(telemetryLines(exampleMoment(EXAMPLE_INSTANT))).toEqual([]);
     expect(readBatteryLevel(undefined)).toBeNull();
     expect(readBatteryLevel(1.2)).toBeNull();
+  });
+
+  it('adds phone readings only when the device reported them', () => {
+    const phone: PhoneTelemetry = {
+      pressureHpa: 1013.25,
+      relativeAltitudeM: 1.2,
+      magneticField: { x: 12.4, y: -3, z: 40 },
+      trueHeading: 91,
+      magneticHeading: 88,
+      stepsToday: 2400,
+      gravity: { x: 0.1, y: 9.8, z: 0.2 },
+      batteryState: 'unplugged',
+      brightness: 0.5,
+      networkType: 'wifi',
+      deviceModel: 'iPhone',
+      illuminance: 320,
+    };
+    const withPhone = telemetryLines({ ...moment, sensors: { ...sensors, phone } });
+    expect(withPhone.map((line) => line.label)).toEqual([
+      'ACC',
+      'GYRO',
+      'ORIENT',
+      'HDG',
+      '±ACC',
+      '±ALT',
+      'SPD',
+      'CRS',
+      'BAT',
+      'BARO',
+      'RALT',
+      'MAG',
+      'TRUE',
+      'MH',
+      'STEPS',
+      'GRAV',
+      'BSTAT',
+      'BRIGHT',
+      'NET',
+      'MODEL',
+      'LIGHT',
+    ]);
+    expect(telemetryLineText(withPhone.find((line) => line.id === 'baro')!)).toBe('BARO  1013.3 hPa');
+    expect(phoneLines({ ...phone, pressureHpa: null, relativeAltitudeM: null, magneticField: null, trueHeading: null, magneticHeading: null, stepsToday: null, gravity: null, batteryState: null, brightness: null, networkType: null, deviceModel: null, illuminance: null })).toEqual([]);
+    expect(telemetryLines(moment).map((line) => line.label)).toEqual(['ACC', 'GYRO', 'ORIENT', 'HDG', '±ACC', '±ALT', 'SPD', 'CRS', 'BAT']);
+    expect(telemetrySnapshot(true, { ...moment, sensors: { ...sensors, phone } })?.phone?.deviceModel).toBe('iPhone');
+    expect(telemetrySnapshot(true, moment)?.phone).toBeUndefined();
   });
 
   it('stores a snapshot only while telemetry is on', () => {
