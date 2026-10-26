@@ -12,6 +12,37 @@ export interface Orientation {
   gamma: number;
 }
 
+/**
+ * Readings Expo Go can take that a browser cannot.
+ * Absent on the web, so the web lines stay the same.
+ */
+export interface PhoneTelemetry {
+  /** Barometric pressure, hPa. */
+  pressureHpa: number | null;
+  /** iOS barometer relative altitude, meters. */
+  relativeAltitudeM: number | null;
+  /** Magnetometer field, microteslas. */
+  magneticField: Axis3 | null;
+  /** True heading from the location compass, degrees. */
+  trueHeading: number | null;
+  /** Magnetic heading from the location compass, degrees. */
+  magneticHeading: number | null;
+  /** Steps since local midnight, where the pedometer can answer. */
+  stepsToday: number | null;
+  /** Gravity vector, m/s². */
+  gravity: Axis3 | null;
+  /** Battery state word, such as charging. */
+  batteryState: string | null;
+  /** Screen brightness, 0–1. */
+  brightness: number | null;
+  /** Network type word, such as wifi. */
+  networkType: string | null;
+  /** Device model name. */
+  deviceModel: string | null;
+  /** Ambient light, lux. Android only. */
+  illuminance: number | null;
+}
+
 export interface SensorSample {
   /** Acceleration including gravity, m/s². */
   acceleration: Axis3 | null;
@@ -23,6 +54,8 @@ export interface SensorSample {
   heading: number | null;
   /** Battery level, 0–1, where the Battery API exists. */
   battery: number | null;
+  /** Extra phone sensors. The web sample leaves this off. */
+  phone?: PhoneTelemetry | null;
 }
 
 export interface TelemetryLine {
@@ -41,6 +74,8 @@ export interface TelemetrySnapshot {
   speed: number | null;
   course: number | null;
   battery: number | null;
+  /** Present when a phone captured the extra Expo Go sensors. */
+  phone?: PhoneTelemetry | null;
 }
 
 export interface TelemetrySource {
@@ -163,6 +198,45 @@ export function telemetryLines(source: TelemetrySource): TelemetryLine[] {
   if (course != null) lines.push({ id: 'crs', label: 'CRS', values: [formatHeading(course)] });
   const battery = readBatteryLevel(sensors?.battery);
   if (battery != null) lines.push({ id: 'bat', label: 'BAT', values: [formatBattery(battery)] });
+  lines.push(...phoneLines(sensors?.phone));
+  return lines;
+}
+
+/** Lines for sensors a phone can read. An empty phone sample adds nothing. */
+export function phoneLines(phone: PhoneTelemetry | null | undefined): TelemetryLine[] {
+  if (!phone) return [];
+  const lines: TelemetryLine[] = [];
+  const pressure = finite(phone.pressureHpa);
+  if (pressure != null) lines.push({ id: 'baro', label: 'BARO', values: [`${pressure.toFixed(1)} hPa`] });
+  const relative = finite(phone.relativeAltitudeM);
+  if (relative != null) lines.push({ id: 'ralt', label: 'RALT', values: [`${signed(relative, 1)} m`] });
+  if (phone.magneticField) {
+    lines.push({
+      id: 'mag',
+      label: 'MAG',
+      values: [signed(phone.magneticField.x, 1), signed(phone.magneticField.y, 1), signed(phone.magneticField.z, 1)],
+    });
+  }
+  const truth = finite(phone.trueHeading);
+  if (truth != null) lines.push({ id: 'true', label: 'TRUE', values: [formatHeading(truth)] });
+  const magnetic = finite(phone.magneticHeading);
+  if (magnetic != null) lines.push({ id: 'mhdg', label: 'MH', values: [formatHeading(magnetic)] });
+  const steps = finite(phone.stepsToday);
+  if (steps != null) lines.push({ id: 'steps', label: 'STEPS', values: [String(Math.round(steps))] });
+  if (phone.gravity) {
+    lines.push({
+      id: 'grav',
+      label: 'GRAV',
+      values: [signed(phone.gravity.x, 2), signed(phone.gravity.y, 2), signed(phone.gravity.z, 2)],
+    });
+  }
+  if (phone.batteryState) lines.push({ id: 'bstat', label: 'BSTAT', values: [phone.batteryState] });
+  const brightness = finite(phone.brightness);
+  if (brightness != null) lines.push({ id: 'bright', label: 'BRIGHT', values: [`${Math.round(brightness * 100)}%`] });
+  if (phone.networkType) lines.push({ id: 'net', label: 'NET', values: [phone.networkType] });
+  if (phone.deviceModel) lines.push({ id: 'model', label: 'MODEL', values: [phone.deviceModel] });
+  const light = finite(phone.illuminance);
+  if (light != null) lines.push({ id: 'light', label: 'LIGHT', values: [`${Math.round(light)} lx`] });
   return lines;
 }
 
@@ -183,6 +257,7 @@ export function telemetrySnapshot(enabled: boolean, source: TelemetrySource): Te
     speed: finite(source.speed),
     course: finite(source.course),
     battery: readBatteryLevel(sensors?.battery),
+    ...(sensors?.phone ? { phone: sensors.phone } : {}),
   };
 }
 

@@ -4,6 +4,7 @@ import { FORMATS, resolvedFormat, type FormatId } from '../composition/formats';
 import { RECIPES } from '../composition/recipes';
 import { defaultMeasurements } from '../data/plugins';
 import { defaultStyle } from './presets';
+import { readStyleRaw, writeStyleRaw } from './styleStore';
 import type { Align, BackgroundMode, LayoutMode, Style, TempUnit } from './types';
 
 export const STYLE_KEY = 'transient.style.v1';
@@ -59,7 +60,7 @@ export function sanitizeStyle(input: unknown): Style {
 
 export function hasSavedStyle(): boolean {
   try {
-    if (typeof localStorage === 'undefined') return false;
+    if (typeof localStorage === 'undefined') return readStyleRaw() != null;
     return localStorage.getItem(STYLE_KEY) != null;
   } catch {
     return true;
@@ -68,8 +69,7 @@ export function hasSavedStyle(): boolean {
 
 export function loadStyle(): Style {
   try {
-    if (typeof localStorage === 'undefined') return defaultStyle();
-    const raw = localStorage.getItem(STYLE_KEY);
+    const raw = readStyleRaw();
     if (!raw) return defaultStyle();
     return sanitizeStyle(JSON.parse(raw));
   } catch {
@@ -79,8 +79,7 @@ export function loadStyle(): Style {
 
 export function saveStyle(style: Style): void {
   try {
-    if (typeof localStorage === 'undefined') return;
-    localStorage.setItem(STYLE_KEY, JSON.stringify(style));
+    writeStyleRaw(JSON.stringify(style));
   } catch {
     /* private mode and full disks should not break the maker */
   }
