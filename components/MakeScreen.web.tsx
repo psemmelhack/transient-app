@@ -8,17 +8,19 @@ import { captureStage } from '../src/export/capture';
 import { captureFileName, downloadBlob } from '../src/export/download';
 import { saveImage } from '../src/share/share';
 import { insertPngText, metadataFor } from '../src/export/pngMeta';
+import { extendedRows } from '../src/data/extended';
 import { telemetryLineText, telemetryLines } from '../src/data/telemetry';
 import { previewBox, PIN_HEADER } from '../src/layout/previewSize';
 import { useMoment } from '../src/location/useMoment';
 import { applyTelemetry, useTelemetry, type TelemetryLive } from '../src/location/useTelemetry';
-import { isTelemetryEnabled } from '../src/data/plugins';
+import { isExtendedEnabled, isTelemetryEnabled } from '../src/data/plugins';
 import type { Moment } from '../src/data/moment';
 import { sunPosition } from '../src/data/solar';
 import type { Scene } from '../src/composition/scene';
 import { makeRecord, sharesForCapture } from '../src/storage/record';
 import { saveTransient } from '../src/storage/library';
 import { CompositionStage } from './CompositionStage';
+import { ExtendedReadout } from './ExtendedReadout';
 import { Icon } from './Icons';
 import { Parameters } from './Parameters';
 import { useStyle } from './StyleContext';
@@ -33,7 +35,8 @@ export function MakeScreen({ onMap, fixture = false }: { onMap: () => void; fixt
   const { style, update, randomize, undo, canUndo } = useStyle();
   const { moment, now, retry } = useMoment(fixture);
   const telemetryOn = isTelemetryEnabled(style.measurements);
-  const telemetry = useTelemetry(telemetryOn);
+  const extendedOn = shell && isExtendedEnabled(style.measurements);
+  const telemetry = useTelemetry(telemetryOn || extendedOn);
   const [note, setNote] = useState('');
   const [sharedWith, setSharedWith] = useState('');
   const [lock, setLock] = useState<Moment | null>(null);
@@ -63,9 +66,11 @@ export function MakeScreen({ onMap, fixture = false }: { onMap: () => void; fixt
   const shown = useMemo(() => {
     const base = lock ?? moment;
     if (!base || lock) return base;
-    return applyTelemetry(base, telemetryOn ? telemetry.sensors : null, telemetryOn ? telemetry.location : null);
-  }, [lock, moment, telemetry.sensors, telemetry.location, telemetryOn]);
+    const live = telemetryOn || extendedOn;
+    return applyTelemetry(base, live ? telemetry.sensors : null, live ? telemetry.location : null);
+  }, [extendedOn, lock, moment, telemetry.sensors, telemetry.location, telemetryOn]);
   const scene = useMemo(() => buildScene(style, shown, note, shown?.at ?? now), [style, shown, note, now]);
+  const extended = useMemo(() => (extendedOn && shown ? extendedRows(shown.sensors) : []), [extendedOn, shown]);
   const box = previewBox({
     sceneWidth: scene.width,
     sceneHeight: scene.height,
@@ -172,7 +177,7 @@ export function MakeScreen({ onMap, fixture = false }: { onMap: () => void; fixt
           temperatureC: frozen.temperatureC,
           sunAzimuth: sun.azimuth,
           sunAltitude: sun.altitude,
-          telemetry: telemetryLines(frozen).map((line) => telemetryLineText(line)),
+          telemetry: telemetryLines(telemetryOn ? frozen : { ...frozen, sensors: null }).map((line) => telemetryLineText(line)),
         }),
       );
       const copy = new Uint8Array(stamped.byteLength);
@@ -322,7 +327,9 @@ export function MakeScreen({ onMap, fixture = false }: { onMap: () => void; fixt
           )}
         </div>
 
-        <div style={{ height: box.gap, transition: 'height 320ms ease' }} />
+        <div data-role="extended-band" style={{ height: box.gap, position: 'relative', overflow: 'hidden', transition: 'height 320ms ease' }}>
+          {extendedOn ? <ExtendedReadout rows={extended} /> : null}
+        </div>
 
         <div ref={paramsRef} style={{ scrollMarginTop: box.pinHeight, width: '100%', minWidth: 0, boxSizing: 'border-box' }}>
           <Parameters style={style} onChange={update} />
