@@ -73,6 +73,16 @@ export const dataLinePlugins: DataLinePlugin[] = [
       return null;
     },
   },
+  {
+    id: 'extended',
+    title: 'Extended data',
+    toggle: true,
+    defaultEnabled: false,
+    /** Phone-only live readout. It is not a poster line. */
+    produce() {
+      return null;
+    },
+  },
 ];
 
 export function isMeasurementEnabled(
@@ -105,6 +115,16 @@ export function measurementLines(
 export function isTelemetryEnabled(measurements: Record<string, boolean>): boolean {
   const plugin = dataLinePlugins.find((item) => item.id === 'telemetry');
   return plugin ? isMeasurementEnabled(measurements, plugin) : false;
+}
+
+export function isExtendedEnabled(measurements: Record<string, boolean>): boolean {
+  const plugin = dataLinePlugins.find((item) => item.id === 'extended');
+  return plugin ? isMeasurementEnabled(measurements, plugin) : false;
+}
+
+/** Extended data is a native-shell switch. A browser never sees it. */
+export function dataTogglePlugins(shell: boolean): DataLinePlugin[] {
+  return dataLinePlugins.filter((plugin) => plugin.toggle && (plugin.id !== 'extended' || shell));
 }
 
 export function defaultMeasurements(): Record<string, boolean> {

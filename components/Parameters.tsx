@@ -3,7 +3,8 @@ import { contrastRatio, formatContrast } from '../src/color/contrast';
 import { isHex, normalizeHex } from '../src/color/oklch';
 import { FORMAT_ORDER, FORMATS, formatChoiceEnabled } from '../src/composition/formats';
 import { CATEGORIES, fontCss, fontsIn, getFont, monoFonts, resolveFont } from '../src/composition/fonts';
-import { dataLinePlugins, isMeasurementEnabled } from '../src/data/plugins';
+import { dataTogglePlugins, isMeasurementEnabled } from '../src/data/plugins';
+import { useNativeShell } from '../src/native/shell';
 import { requestMotionAccess } from '../src/data/telemetry';
 import { notifyTelemetryPermission } from '../src/location/useTelemetry';
 import {
@@ -30,6 +31,7 @@ const SWATCHES = ['#111111', '#FFFFFF', '#D2231C', '#4B1C40', '#1E3A2D', '#CBA65
 const MOTION_NOTE = 'Motion access is off. Location extras still show.';
 
 export function Parameters({ style, onChange }: { style: Style; onChange: (next: Style) => void }) {
+  const shell = useNativeShell();
   const [motionNote, setMotionNote] = useState<string | null>(null);
 
   function onMeasurement(id: string, on: boolean) {
@@ -205,9 +207,7 @@ export function Parameters({ style, onChange }: { style: Style; onChange: (next:
       </Section>
 
       <Section label="Data">
-        {dataLinePlugins
-          .filter((plugin) => plugin.toggle)
-          .map((plugin) => {
+        {dataTogglePlugins(shell).map((plugin) => {
             const on = isMeasurementEnabled(style.measurements, plugin);
             return (
               <div key={plugin.id}>
