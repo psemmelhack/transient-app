@@ -1,5 +1,6 @@
 import { useEffect, useState, type CSSProperties } from 'react';
 import { StatusBar } from 'expo-status-bar';
+import { FitDiagnostic } from './components/FitDiagnostic';
 import { MakeScreen } from './components/MakeScreen';
 import { MapScreen } from './components/MapScreen';
 import { Proof } from './components/Proof';
@@ -79,6 +80,7 @@ export default function App() {
           </div>
         )}
       </div>
+      <FitDiagnostic />
       {toast && (
         <div role="status" style={importToast}>
           {toast}
