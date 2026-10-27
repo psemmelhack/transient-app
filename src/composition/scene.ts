@@ -1,6 +1,7 @@
-import { measurementLines, isTelemetryEnabled } from '../data/plugins';
+import { measurementLines, isExtendedEnabled } from '../data/plugins';
 import { deviceTimeZone, type Moment } from '../data/moment';
-import { omitSupersededAccuracy, posterTelemetryLines, type TelemetryLine } from '../data/telemetry';
+import { linesForCard, omitSupersededAccuracy, type TelemetryLine } from '../data/telemetry';
+import { layoutSpreadTelemetry, POSTER_HERO_BAND, TELEMETRY_COLUMN_CAP, TELEMETRY_FONT_FLOOR } from './telemetryFit';
 import type { Style } from '../style/types';
 import { FORMATS } from './formats';
 import { getFont, resolveFont, type CssFont, type FontRole } from './fonts';
@@ -77,6 +78,8 @@ export interface TelemetryBlock {
   fontSize: number;
   lineHeight: number;
   opacity: number;
+  /** 1 is the narrow sensor grid. 2+ flows label and value pairs across the card. */
+  columns: number;
 }
 
 export interface QuietNode {
@@ -104,6 +107,7 @@ export type QuietBlock =
       maxWidth?: number;
       /** A note wraps to its measure. Other lines may still shrink onto one line. */
       wrap?: boolean;
+      role?: 'place' | 'date';
     }
   | {
       kind: 'note';
@@ -149,6 +153,7 @@ export type QuietBlock =
       marginTop: number;
       opacity?: number;
       tracking?: number;
+      role?: 'place' | 'date';
     }
   | {
       kind: 'rows';
@@ -173,6 +178,7 @@ export type QuietBlock =
       lineHeight: number;
       marginTop: number;
       opacity: number;
+      columns: number;
     };
 
 export interface MarkNode {
@@ -238,8 +244,7 @@ function measured(style: Style, moment: Moment) {
 }
 
 function telemetryFor(style: Style, moment: Moment): TelemetryLine[] {
-  if (!isTelemetryEnabled(style.measurements)) return [];
-  return posterTelemetryLines(moment);
+  return linesForCard(style.measurements, moment);
 }
 
 function plexFont(): CssFont {
@@ -247,10 +252,19 @@ function plexFont(): CssFont {
   return { family: font.family, weight: font.weight, style: 'normal', features: '"tnum" 1' };
 }
 
-function telemetryBlock(lines: TelemetryLine[], fontSize: number, lineHeight: number, opacity: number): TelemetryBlock | undefined {
+function telemetryBlock(
+  lines: TelemetryLine[],
+  fontSize: number,
+  lineHeight: number,
+  opacity: number,
+  columns = 1,
+): TelemetryBlock | undefined {
   if (!lines.length) return undefined;
-  return { lines, font: plexFont(), fontSize, lineHeight, opacity };
+  return { lines, font: plexFont(), fontSize, lineHeight, opacity, columns };
 }
+
+/** Gap the footer renders above the telemetry block. */
+const TELEMETRY_GAP = 12;
 
 export function buildScene(style: Style, moment: Moment | null, message: string, now = new Date()): Scene {
   const format = FORMATS[style.format];
@@ -358,11 +372,14 @@ function posterNodes(recipe: PosterRecipe, style: Style, moment: Moment, message
   const arrangement = footerArrangement(recipe, style.align);
   const metaLines = linesFor(recipe.footer.metaTokens, moment, message, recipe.footer.metaJoin);
   const extra = extras(style, moment);
-  const telemetry = telemetryBlock(telemetryFor(style, moment), Math.min(16, recipe.footer.metaSize), 1.45, recipe.footer.metaOpacity);
+  const cardLines = telemetryFor(style, moment);
+  const extended = isExtendedEnabled(style.measurements);
+  const telemetryFont = Math.min(16, recipe.footer.metaSize);
+  const telemetryLeading = 1.45;
   const messageText = renderToken('message', moment, message)?.trim() || null;
   const hero = nodes.find((node) => node.kind === 'fit-stack');
   if (hero && hero.kind === 'fit-stack') {
-    hero.footerCue = `${extra.length}:${telemetry?.lines.map((line) => line.id).join(',') ?? ''}:${messageText?.length ?? 0}`;
+    hero.footerCue = `${extra.length}:${cardLines.map((line) => line.id).join(',')}:${messageText?.length ?? 0}`;
   }
   const splitLeft = recipe.footer.splitLeft
     ? renderToken(recipe.footer.splitLeft, moment, message) ?? undefined
@@ -384,7 +401,7 @@ function posterNodes(recipe: PosterRecipe, style: Style, moment: Moment, message
       })
     : null;
 
-  nodes.push({
+  const footer: FooterNode = {
     kind: 'footer',
     left: box.left,
     right: box.right,
@@ -411,7 +428,6 @@ function posterNodes(recipe: PosterRecipe, style: Style, moment: Moment, message
     splitLeft,
     splitRight,
     extraLines: extra,
-    telemetry,
     mark: recipe.footer.markInFlow
       ? {
           text: MARK,
@@ -422,7 +438,15 @@ function posterNodes(recipe: PosterRecipe, style: Style, moment: Moment, message
           marginTop: recipe.footer.markInFlow.marginTop,
         }
       : undefined,
-  });
+  };
+  if (cardLines.length) {
+    const room = format.height - footer.bottom - POSTER_HERO_BAND - footerBlockHeight(footer) - TELEMETRY_GAP;
+    const spread = extended
+      ? layoutSpreadTelemetry(cardLines.length, telemetryFont, telemetryLeading, room)
+      : { columns: 1, fontSize: telemetryFont };
+    footer.telemetry = telemetryBlock(cardLines, spread.fontSize, telemetryLeading, recipe.footer.metaOpacity, spread.columns);
+  }
+  nodes.push(footer);
 
   if (recipe.absoluteMark) {
     const mark = markNode(style, recipe.absoluteMark, native ? recipe.absoluteMark.bottom : Math.max(recipe.absoluteMark.bottom, format.inset.bottom * 0.4));
@@ -457,40 +481,51 @@ function quietNodes(recipe: QuietRecipe, style: Style, moment: Moment, message: 
   }
   const readings = measured(style, moment);
   const telemetry = telemetryFor(style, moment);
+  const extended = isExtendedEnabled(style.measurements);
   if (readings.length || telemetry.length) {
     const rowBlock = recipe.measurementRows ? blocks.find((block) => block.kind === 'rows') : undefined;
+    const foldIntoRows = Boolean(rowBlock && rowBlock.kind === 'rows' && !extended);
     if (rowBlock && rowBlock.kind === 'rows') {
       for (const line of readings) {
         rowBlock.rows.push({ label: measurementLabel(line.id), value: measurementValue(line.id, line.text) });
       }
-      for (const line of telemetry) {
-        rowBlock.rows.push({ label: line.label, value: line.values.join('  ') });
+      if (foldIntoRows) {
+        for (const line of telemetry) {
+          rowBlock.rows.push({ label: line.label, value: line.values.join('  ') });
+        }
       }
-    } else {
+    } else if (readings.length) {
       const meta = recipe.measurementMeta;
-      if (readings.length) {
-        blocks.push({
-          kind: 'meta',
-          lines: readings.map((line) => line.text),
-          font: fontOf(style, meta?.font ?? 'mono'),
-          fontSize: meta?.size ?? 16,
-          lineHeight: meta?.lineHeight ?? 1.7,
-          marginTop: meta?.marginTop ?? 22,
-          opacity: meta?.opacity ?? 0.72,
-          tracking: meta?.tracking,
-        });
-      }
-      if (telemetry.length) {
-        blocks.push({
-          kind: 'telemetry',
-          lines: telemetry,
-          font: plexFont(),
-          fontSize: meta?.size ?? 15,
-          lineHeight: 1.55,
-          marginTop: readings.length ? 10 : (meta?.marginTop ?? 18),
-          opacity: meta?.opacity ?? 0.86,
-        });
-      }
+      blocks.push({
+        kind: 'meta',
+        lines: readings.map((line) => line.text),
+        font: fontOf(style, meta?.font ?? 'mono'),
+        fontSize: meta?.size ?? 16,
+        lineHeight: meta?.lineHeight ?? 1.7,
+        marginTop: meta?.marginTop ?? 22,
+        opacity: meta?.opacity ?? 0.72,
+        tracking: meta?.tracking,
+      });
+    }
+    if (telemetry.length && !foldIntoRows) {
+      const meta = recipe.measurementMeta;
+      const fontSize = meta?.size ?? 15;
+      const lineHeight = 1.55;
+      const marginTop = readings.length && !(rowBlock && rowBlock.kind === 'rows') ? 10 : (meta?.marginTop ?? 18);
+      const room = format.height - top - bottom - quietStackHeight(blocks) - marginTop;
+      const spread = extended
+        ? layoutSpreadTelemetry(telemetry.length, fontSize, lineHeight, room)
+        : { columns: 1, fontSize };
+      blocks.push({
+        kind: 'telemetry',
+        lines: telemetry,
+        font: plexFont(),
+        fontSize: spread.fontSize,
+        lineHeight,
+        marginTop,
+        opacity: meta?.opacity ?? 0.86,
+        columns: spread.columns,
+      });
     }
   }
   const rawHeight = quietStackHeight(blocks);
@@ -560,6 +595,7 @@ function quietBlock(spec: QuietBlockSpec, style: Style, moment: Moment, message:
       marginTop: spec.marginTop,
       opacity: spec.opacity,
       maxWidth: spec.maxWidth,
+      role: tokenRole(spec.token),
     };
   }
   if (spec.kind === 'note') {
@@ -653,7 +689,14 @@ function quietBlock(spec: QuietBlockSpec, style: Style, moment: Moment, message:
     marginTop: spec.marginTop,
     opacity: spec.opacity,
     tracking: spec.tracking,
+    role: spec.tokens.some((token) => token.startsWith('place')) ? 'place' : undefined,
   };
+}
+
+function tokenRole(token: string): 'place' | 'date' | undefined {
+  if (token.startsWith('place')) return 'place';
+  if (token.startsWith('date') || token === 'date-time-quiet') return 'date';
+  return undefined;
 }
 
 export function quietStackHeight(blocks: QuietBlock[]): number {
@@ -682,8 +725,11 @@ function quietBlockHeight(block: QuietBlock): number {
       return block.marginTop + block.lines.length * block.fontSize * block.lineHeight;
     case 'rows':
       return block.marginTop + block.rows.length * (block.gap * 2 + block.valueSize * block.lineHeight);
-    case 'telemetry':
-      return block.marginTop + block.lines.length * block.fontSize * block.lineHeight;
+    case 'telemetry': {
+      const columns = Math.max(1, block.columns || 1);
+      const rows = Math.ceil(block.lines.length / columns);
+      return block.marginTop + rows * block.fontSize * block.lineHeight;
+    }
     default:
       return 0;
   }
@@ -711,7 +757,10 @@ export function footerBlockHeight(node: FooterNode): number {
   const body = node.arrangement === 'split' ? Math.max(messageHeight, metaHeight) : messageHeight + metaHeight + splitHeight;
   const extra = node.extraLines.length ? 10 + node.extraLines.length * node.metaSize * node.metaLineHeight : 0;
   const telemetry = node.telemetry
-    ? 12 + node.telemetry.lines.length * node.telemetry.fontSize * node.telemetry.lineHeight
+    ? TELEMETRY_GAP +
+      Math.ceil(node.telemetry.lines.length / Math.max(1, node.telemetry.columns || 1)) *
+        node.telemetry.fontSize *
+        node.telemetry.lineHeight
     : 0;
   const mark = node.mark ? node.mark.marginTop + node.mark.fontSize * 1.4 : 0;
   return body + extra + telemetry + mark;
@@ -730,6 +779,11 @@ function fitQuietBlocks(blocks: QuietBlock[], available: number): QuietBlock[] {
   const rows = next.find((block) => block.kind === 'rows');
   if (rows && rows.kind === 'rows') {
     while (quietStackHeight(next) > available && rows.gap > 6) rows.gap -= 1;
+  }
+  const spread = next.find((block) => block.kind === 'telemetry');
+  if (spread && spread.kind === 'telemetry' && spread.columns > 1) {
+    while (quietStackHeight(next) > available && spread.columns < TELEMETRY_COLUMN_CAP) spread.columns += 1;
+    while (quietStackHeight(next) > available && spread.fontSize > TELEMETRY_FONT_FLOOR) spread.fontSize -= 1;
   }
   if (quietStackHeight(next) <= available) return next;
   const coords = next.find((block) => block.kind === 'coords');

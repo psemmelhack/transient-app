@@ -1,4 +1,5 @@
 import { isNativeShell } from '../native/shell';
+import { isExtendedEnabled, isTelemetryEnabled } from './plugins';
 
 /** Phone sensors and GPS extras, frozen with the transient. Missing readings stay null. */
 
@@ -281,6 +282,36 @@ export function posterTelemetryLines(source: TelemetrySource): TelemetryLine[] {
     .filter((line) => rank.has(line.id))
     .sort((a, b) => (rank.get(a.id) ?? 0) - (rank.get(b.id) ?? 0))
     .slice(0, POSTER_TELEMETRY_CAP);
+}
+
+const EXTENDED_ORDER = ['baro', 'ralt', 'mag', 'true', 'mhdg', 'grav', 'light', 'bat', 'bstat', 'bright', 'net', 'steps', 'model'];
+
+/**
+ * Phone readings for the card when Telemetry itself is off.
+ * MAG and GRAV stay three short numbers. A missing reading is left out.
+ */
+export function extendedReadings(source: TelemetrySource): TelemetryLine[] {
+  const lines = phoneLines(source.sensors?.phone);
+  const battery = readBatteryLevel(source.sensors?.battery);
+  if (battery != null) lines.push({ id: 'bat', label: 'BAT', values: [formatBattery(battery)] });
+  const rank = new Map(EXTENDED_ORDER.map((id, index) => [id, index]));
+  return lines
+    .filter((line) => rank.has(line.id))
+    .sort((a, b) => (rank.get(a.id) ?? 0) - (rank.get(b.id) ?? 0));
+}
+
+/**
+ * Lines drawn in the telemetry block.
+ * Telemetry alone stays capped. Extended data drops the cap and adds the phone
+ * readings that are not already in the block, so BARO, TRUE, and BAT appear once.
+ */
+export function linesForCard(measurements: Record<string, boolean>, source: TelemetrySource): TelemetryLine[] {
+  const telemetry = isTelemetryEnabled(measurements);
+  const extended = isExtendedEnabled(measurements);
+  if (!telemetry && !extended) return [];
+  if (!extended) return posterTelemetryLines(source);
+  if (telemetry) return telemetryLines(source);
+  return extendedReadings(source);
 }
 
 export function telemetryLineText(line: TelemetryLine): string {

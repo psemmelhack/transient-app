@@ -1,7 +1,7 @@
 import type { Scene } from '../composition/scene';
-import { isTelemetryEnabled, measurementLines } from '../data/plugins';
+import { isExtendedEnabled, isTelemetryEnabled, measurementLines } from '../data/plugins';
 import type { Moment } from '../data/moment';
-import { omitSupersededAccuracy, telemetryLineText, telemetryLines, telemetrySnapshot } from '../data/telemetry';
+import { linesForCard, omitSupersededAccuracy, telemetryLineText, telemetryLines, telemetrySnapshot } from '../data/telemetry';
 import { sunPosition } from '../data/solar';
 import type { Style } from '../style/types';
 import type { ShareEntry, TransientRecord } from './library';
@@ -23,7 +23,8 @@ export function makeRecord(input: {
 }): TransientRecord {
   const sun = sunPosition(input.moment.at, input.moment.latitude, input.moment.longitude);
   const telemetryOn = isTelemetryEnabled(input.style.measurements);
-  const telemetry = telemetryOn ? telemetryLines(input.moment) : [];
+  const extendedOn = isExtendedEnabled(input.style.measurements);
+  const telemetry = telemetryOn ? telemetryLines(input.moment) : extendedOn ? linesForCard(input.style.measurements, input.moment) : [];
   const lines = [
     ...omitSupersededAccuracy(measurementLines(input.style.measurements, input.style.temperatureUnit, input.moment), telemetry),
     ...telemetry.map((line) => ({ id: line.id, text: telemetryLineText(line) })),
@@ -44,7 +45,7 @@ export function makeRecord(input: {
     sunAzimuth: sun.azimuth,
     sunAltitude: sun.altitude,
     lines,
-    telemetry: telemetrySnapshot(telemetryOn, input.moment),
+    telemetry: telemetrySnapshot(telemetryOn || extendedOn, input.moment),
     style: input.style,
     width: input.scene.width,
     height: input.scene.height,

@@ -78,7 +78,7 @@ export const dataLinePlugins: DataLinePlugin[] = [
     title: 'Extended data',
     toggle: true,
     defaultEnabled: false,
-    /** Phone-only live readout. It is not a poster line. */
+    /** Phone readings drawn in the telemetry block, not as their own data line. */
     produce() {
       return null;
     },
