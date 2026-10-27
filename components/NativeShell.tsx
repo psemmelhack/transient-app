@@ -1,14 +1,17 @@
 import { useCallback, useEffect, useRef, useState, type ComponentType, type Ref } from 'react';
-import { View } from 'react-native';
+import { ActivityIndicator, Pressable, Text, View } from 'react-native';
 import WebViewModule, { type WebViewMessageEvent } from 'react-native-webview';
 import * as LegacyFileSystem from 'expo-file-system/legacy';
 import * as Location from 'expo-location';
 import * as Sharing from 'expo-sharing';
-import { paper } from './theme';
+import { ink, muted, paper } from './theme';
 import { requestNativeTelemetryPermissions } from '../src/location/nativePermissions';
 import { useTelemetry } from '../src/location/useTelemetry';
+import * as Updates from 'expo-updates';
+import { factsFromUpdates, type BuildFacts } from '../src/native/buildStamp';
 import {
   joinedCapture,
+  NATIVE_BUILD_EVENT,
   parseWebMessage,
   pushCaptureChunk,
   startCapture,
@@ -18,21 +21,34 @@ import {
   type ShellLocationDetail,
   type ShellPlace,
 } from '../src/native/protocol';
+import {
+  PACK_READY_MS,
+  SITE,
+  TERMINATE_REASON,
+  appendFailure,
+  failureText,
+  httpFailureText,
+  nextAfterFailure,
+  watchdogReason,
+  webViewSource,
+  type ShellTarget,
+} from '../src/native/shellLoad';
 import { installWebBundle, type WebBundleManifest } from '../src/native/webBundle';
 
-const SITE = 'https://transient.notarist.art/';
-
-type Page = { html: string; baseUrl: string } | { uri: string };
+type Phase = 'opening' | 'ready' | 'failed';
+type Shown = ShellTarget & { view: number };
 
 /** tsc resolves the web WebView types, whose platform props collapse to never. Metro loads the real view. */
 type ShellWebViewProps = {
   ref?: Ref<ShellWebViewHandle>;
   originWhitelist?: string[];
-  source: { html: string; baseUrl?: string } | { uri: string };
+  source: { uri: string };
   allowingReadAccessToURL?: string;
-  onLoadEnd?: () => void;
   onMessage?: (event: WebViewMessageEvent) => void;
-  onError?: () => void;
+  onError?: (event: { nativeEvent?: { description?: string } }) => void;
+  onHttpError?: (event: { nativeEvent?: { statusCode?: number } }) => void;
+  onContentProcessDidTerminate?: () => void;
+  onRenderProcessGone?: () => void;
   javaScriptEnabled?: boolean;
   domStorageEnabled?: boolean;
   allowFileAccess?: boolean;
@@ -45,7 +61,7 @@ type ShellWebViewProps = {
   style?: { flex?: number; backgroundColor?: string };
 };
 
-type ShellWebViewHandle = { injectJavaScript: (script: string) => void };
+type ShellWebViewHandle = { injectJavaScript: (script: string) => void; reload?: () => void };
 
 const WebView = WebViewModule as unknown as ComponentType<ShellWebViewProps>;
 
@@ -124,8 +140,16 @@ export function NativeShell() {
   const placeCache = useRef<{ key: string; place: ShellPlace | null } | null>(null);
   const watch = useRef<Location.LocationSubscription | null>(null);
   const captures = useRef(new Map<string, PendingCapture>());
-  const [page, setPage] = useState<Page | null>(null);
-  const [baseUrl, setBaseUrl] = useState<string | null>(null);
+  const buildRef = useRef<BuildFacts | null>(null);
+  const generation = useRef(0);
+  const viewToken = useRef(0);
+  const targetRef = useRef<Shown | null>(null);
+  const watchdog = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const siteReloaded = useRef(false);
+  const [attempt, setAttempt] = useState(0);
+  const [target, setTarget] = useState<Shown | null>(null);
+  const [phase, setPhase] = useState<Phase>('opening');
+  const [failure, setFailure] = useState<string | null>(null);
   const [telemetryOn, setTelemetryOn] = useState(false);
   const telemetry = useTelemetry(telemetryOn);
 
@@ -149,23 +173,110 @@ export function NativeShell() {
     [push],
   );
 
+  const clearWatchdog = useCallback(() => {
+    if (watchdog.current != null) clearTimeout(watchdog.current);
+    watchdog.current = null;
+  }, []);
+
+  const remember = useCallback(
+    (reason: string) => {
+      const base = buildRef.current ?? factsFromUpdates(Updates, null);
+      const next = { ...base, failure: appendFailure(base.failure, reason) };
+      buildRef.current = next;
+      if (!loaded.current) return;
+      push(
+        `window.__transientBuild = ${JSON.stringify(next)}; window.dispatchEvent(new CustomEvent(${JSON.stringify(NATIVE_BUILD_EVENT)}, { detail: window.__transientBuild }));`,
+      );
+    },
+    [push],
+  );
+
+  const presentRef = useRef<(body: ShellTarget) => void>(() => undefined);
+
+  const arm = useCallback(
+    (shown: Shown) => {
+      clearWatchdog();
+      const token = generation.current;
+      const view = shown.view;
+      watchdog.current = setTimeout(() => {
+        if (token !== generation.current || view !== viewToken.current) return;
+        const step = nextAfterFailure(shown, watchdogReason(shown));
+        if (step.kind === 'site') {
+          remember(step.reason);
+          presentRef.current({ kind: 'site' });
+          return;
+        }
+        clearWatchdog();
+        remember(step.reason);
+        setFailure(step.reason);
+        setPhase('failed');
+      }, PACK_READY_MS);
+    },
+    [clearWatchdog, remember],
+  );
+
+  const present = useCallback(
+    (body: ShellTarget) => {
+      if (body.kind === 'site') siteReloaded.current = false;
+      const view = ++viewToken.current;
+      const shown: Shown = { ...body, view };
+      targetRef.current = shown;
+      loaded.current = false;
+      setTarget(shown);
+      setPhase('opening');
+      arm(shown);
+    },
+    [arm],
+  );
+  presentRef.current = present;
+
+  const reportFailure = useCallback(
+    (reason: string, view: number) => {
+      if (view !== viewToken.current) return;
+      const step = nextAfterFailure(targetRef.current, reason);
+      if (step.kind === 'site') {
+        remember(step.reason);
+        present({ kind: 'site' });
+        return;
+      }
+      clearWatchdog();
+      remember(step.reason);
+      setFailure(step.reason);
+      setPhase('failed');
+    },
+    [clearWatchdog, present, remember],
+  );
+
   useEffect(() => {
+    const token = ++generation.current;
+    siteReloaded.current = false;
+    targetRef.current = null;
+    loaded.current = false;
+    setTarget(null);
+    setPhase('opening');
+    setFailure(null);
+    clearWatchdog();
     let cancelled = false;
     (async () => {
       try {
         const manifest = require('../embedded-web/manifest.js') as WebBundleManifest;
-        const installed = await installWebBundle(manifest);
-        if (cancelled) return;
-        setBaseUrl(installed.baseUrl);
-        setPage({ html: installed.html, baseUrl: installed.baseUrl });
-      } catch {
-        if (!cancelled) setPage({ uri: SITE });
+        const updateId = typeof Updates.updateId === 'string' ? Updates.updateId : null;
+        const installed = await installWebBundle(manifest, updateId);
+        if (cancelled || token !== generation.current) return;
+        buildRef.current = factsFromUpdates(Updates, installed.revision);
+        present({ kind: 'pack', indexUrl: installed.indexUrl, readAccessUrl: installed.readAccessUrl });
+      } catch (error) {
+        if (cancelled || token !== generation.current) return;
+        buildRef.current = factsFromUpdates(Updates, null);
+        remember(failureText(error));
+        present({ kind: 'site' });
       }
     })();
     return () => {
       cancelled = true;
+      clearWatchdog();
     };
-  }, []);
+  }, [attempt, clearWatchdog, present, remember]);
 
   const listen = useCallback(async () => {
     watch.current?.remove();
@@ -213,12 +324,21 @@ export function NativeShell() {
       push(`window.dispatchEvent(new CustomEvent('transient-native-location', { detail: ${JSON.stringify(lastLocation.current)} }));`);
     }
     if (lastTelemetry.current) push(lastTelemetry.current);
+    const build = buildRef.current;
+    if (build) {
+      push(
+        `window.__transientBuild = ${JSON.stringify(build)}; window.dispatchEvent(new CustomEvent(${JSON.stringify(NATIVE_BUILD_EVENT)}, { detail: window.__transientBuild }));`,
+      );
+    }
   }
 
-  async function onMessage(event: WebViewMessageEvent) {
+  async function onMessage(event: WebViewMessageEvent, view: number) {
     const message = parseWebMessage(event.nativeEvent.data);
     if (!message) return;
     if (message.type === 'ready') {
+      if (view !== viewToken.current) return;
+      clearWatchdog();
+      setPhase('ready');
       flush();
       return;
     }
@@ -261,20 +381,41 @@ export function NativeShell() {
     }
   }
 
+  const source = target ? webViewSource(target) : null;
+
   return (
     <View style={{ flex: 1, backgroundColor: paper }}>
-      {page ? (
+      {target && source ? (
         <WebView
+          key={source.uri}
           ref={webRef}
           originWhitelist={['*']}
-          source={'html' in page ? { html: page.html, baseUrl: page.baseUrl } : { uri: page.uri }}
-          allowingReadAccessToURL={baseUrl ?? undefined}
-          onLoadEnd={flush}
+          source={{ uri: source.uri }}
+          allowingReadAccessToURL={source.allowingReadAccessToURL}
           onMessage={(event) => {
-            void onMessage(event);
+            void onMessage(event, target.view);
           }}
-          onError={() => {
-            if ('html' in (page ?? {})) setPage({ uri: SITE });
+          onError={(event) => {
+            const description = event.nativeEvent?.description?.trim();
+            reportFailure(description || 'The page could not be opened.', target.view);
+          }}
+          onHttpError={(event) => {
+            reportFailure(httpFailureText(event.nativeEvent?.statusCode), target.view);
+          }}
+          onContentProcessDidTerminate={() => {
+            if (target.view !== viewToken.current) return;
+            if (target.kind === 'site' && !siteReloaded.current) {
+              siteReloaded.current = true;
+              loaded.current = false;
+              setPhase('opening');
+              webRef.current?.reload?.();
+              arm(target);
+              return;
+            }
+            reportFailure(TERMINATE_REASON, target.view);
+          }}
+          onRenderProcessGone={() => {
+            reportFailure(TERMINATE_REASON, target.view);
           }}
           javaScriptEnabled
           domStorageEnabled
@@ -287,9 +428,32 @@ export function NativeShell() {
           contentInsetAdjustmentBehavior="never"
           style={{ flex: 1, backgroundColor: paper }}
         />
-      ) : (
-        <View style={{ flex: 1, backgroundColor: paper }} />
-      )}
+      ) : null}
+      {phase !== 'ready' ? (
+        <View style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, backgroundColor: paper, alignItems: 'center', justifyContent: 'center' }}>
+          <Text style={{ color: ink, fontSize: 20, fontWeight: '500', letterSpacing: 0.8 }}>Transient</Text>
+          {phase === 'failed' ? (
+            <>
+              <Text style={{ color: muted, fontSize: 14, lineHeight: 20, textAlign: 'center', marginTop: 16, paddingHorizontal: 32 }}>{failure}</Text>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Try again"
+                onPress={() => {
+                  setPhase('opening');
+                  setFailure(null);
+                  setTarget(null);
+                  setAttempt((value) => value + 1);
+                }}
+                style={{ marginTop: 18, paddingVertical: 10, paddingHorizontal: 18 }}
+              >
+                <Text style={{ color: ink, fontSize: 15, fontWeight: '500' }}>Try again</Text>
+              </Pressable>
+            </>
+          ) : (
+            <ActivityIndicator color={ink} style={{ marginTop: 18 }} />
+          )}
+        </View>
+      ) : null}
     </View>
   );
 }

@@ -4,6 +4,7 @@ import { WEB_SOURCE, type WebCommand } from './protocol';
 export const NATIVE_LOCATION_EVENT = 'transient-native-location';
 export const NATIVE_TELEMETRY_EVENT = 'transient-native-telemetry';
 export const NATIVE_CAPTURE_EVENT = 'transient-native-capture';
+export { NATIVE_BUILD_EVENT } from './protocol';
 
 type BridgeWindow = Window & {
   ReactNativeWebView?: { postMessage: (message: string) => void };
