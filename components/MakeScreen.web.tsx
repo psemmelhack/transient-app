@@ -1,4 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
+import { noteTripleTap } from '../src/ui/press';
+import { shellIconButton, shellIconRow } from '../src/ui/shellChrome';
+import { toggleDiagnostic } from '../src/composition/fitReport';
 import { flushSync } from 'react-dom';
 import { buildScene } from '../src/composition/scene';
 import { captureStage } from '../src/export/capture';
@@ -49,6 +52,13 @@ export function MakeScreen({ onMap, fixture = false }: { onMap: () => void; fixt
   const dockRef = useRef<HTMLDivElement>(null);
   const paramsRef = useRef<HTMLDivElement>(null);
   const stageRef = useRef<HTMLElement | null>(null);
+  const taps = useRef<number[]>([]);
+
+  function onPosterTap() {
+    const next = noteTripleTap(taps.current, Date.now());
+    taps.current = next.stamps;
+    if (next.fired) toggleDiagnostic();
+  }
 
   const shown = useMemo(() => {
     const base = lock ?? moment;
@@ -231,24 +241,29 @@ export function MakeScreen({ onMap, fixture = false }: { onMap: () => void; fixt
         <div ref={pinRef} style={{ ...pinStyle, height: box.pinHeight }}>
           <header style={shell ? { ...headerStyle, paddingRight: SHELL_HEADER_PADDING_RIGHT } : headerStyle}>
             <div style={titleStyle}>Transient</div>
-            <div style={iconRow}>
-              <button type="button" aria-label="Undo" onClick={undo} style={{ ...iconBtn, opacity: canUndo ? 1 : 0, pointerEvents: canUndo ? 'auto' : 'none' }}>
+            <div className="shell-icons" style={shellIconRow}>
+              <button type="button" aria-label="Undo" onClick={undo} style={{ ...shellIconButton, color: ink, opacity: canUndo ? 1 : 0, pointerEvents: canUndo ? 'auto' : 'none' }}>
                 <Icon name="undo" size={20} color={ink} />
               </button>
-              <button type="button" aria-label="Randomize style" onClick={onDie} style={iconBtn}>
+              <button type="button" aria-label="Randomize style" onClick={onDie} style={{ ...shellIconButton, color: ink }}>
                 <span key={roll} className={roll > 0 ? 'tumble' : undefined} style={{ display: 'inline-flex' }}>
                   <Icon name="die" size={20} color={ink} />
                 </span>
               </button>
-              <button type="button" aria-label={atControls ? 'Hide style' : 'Style'} aria-pressed={atControls} onClick={onStyle} style={iconBtn}>
+              <button type="button" aria-label={atControls ? 'Hide style' : 'Style'} aria-pressed={atControls} onClick={onStyle} style={{ ...shellIconButton, color: ink }}>
                 <Icon name="sliders" size={20} color={ink} />
               </button>
-              <button type="button" aria-label="My transients" onClick={onMap} style={iconBtn}>
+              <button type="button" aria-label="My transients" onClick={onMap} style={{ ...shellIconButton, color: ink }}>
                 <Icon name="map" size={20} color={ink} />
               </button>
             </div>
           </header>
-          <div style={{ height: box.height, display: 'flex', justifyContent: 'center' }}>
+          <div
+            data-role="poster-preview"
+            onPointerUp={() => onPosterTap()}
+            onTouchEnd={() => onPosterTap()}
+            style={{ height: box.height, display: 'flex', justifyContent: 'center' }}
+          >
             <div
               style={{
                 width: box.width,
@@ -382,7 +397,7 @@ const headerStyle: CSSProperties = {
   paddingRight: 'max(12px, env(safe-area-inset-right))',
   boxSizing: 'border-box',
   minWidth: 0,
-  overflow: 'hidden',
+  overflow: 'visible',
 };
 
 const titleStyle: CSSProperties = {
@@ -395,28 +410,6 @@ const titleStyle: CSSProperties = {
   fontWeight: 500,
   fontSize: 20,
   letterSpacing: '0.04em',
-};
-
-const iconRow: CSSProperties = {
-  display: 'flex',
-  alignItems: 'center',
-  flex: 'none',
-};
-
-const iconBtn: CSSProperties = {
-  width: 40,
-  height: 40,
-  minWidth: 40,
-  flex: 'none',
-  overflow: 'hidden',
-  display: 'inline-flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  border: 'none',
-  background: 'transparent',
-  padding: 0,
-  cursor: 'pointer',
-  color: ink,
 };
 
 function textAction(disabled: boolean): CSSProperties {
@@ -570,6 +563,9 @@ const toastStyle: CSSProperties = {
 
 const chromeCss = `
   button, input, textarea { font: inherit; color: inherit; box-sizing: border-box; max-width: 100%; }
+  header { overflow: visible; }
+  header button { max-width: none; overflow: visible; }
+  header svg { display: block; width: 20px; height: 20px; max-width: none; overflow: visible; flex: none; }
   textarea::placeholder, input::placeholder { color: ${muted}; }
   .h-scroll { scrollbar-width: none; overscroll-behavior-x: contain; -webkit-overflow-scrolling: touch; }
   .h-scroll::-webkit-scrollbar { display: none; }

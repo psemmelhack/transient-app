@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
+import { armTap } from '../src/ui/press';
+import { shellIconButton } from '../src/ui/shellChrome';
 import { LngLatBounds, Map as MapLibre, Marker } from 'maplibre-gl';
 import { listTransients, type ShareEntry, type TransientRecord } from '../src/storage/library';
 import { capturedUnshared, emptyLibrary, libraryShareLabel } from '../src/ui/actions';
@@ -221,11 +223,11 @@ export function MapScreen({ onBack, active = true }: { onBack: () => void; activ
           padding: '0 12px 0 8px',
           flex: 'none',
           minWidth: 0,
-          overflow: 'hidden',
+          overflow: 'visible',
           ...(shell ? { paddingRight: SHELL_HEADER_PADDING_RIGHT } : {}),
         }}
       >
-        <button type="button" aria-label="Back" onClick={onBack} style={backBtn}>
+        <button type="button" aria-label="Back" onClick={onBack} style={{ ...shellIconButton, color: ink }}>
           <Icon name="back" size={20} color={ink} />
         </button>
         <div style={{ flex: 1, minWidth: 0, overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis', fontFamily: ui, fontWeight: 500, fontSize: 18, letterSpacing: '0.02em' }}>My transients</div>
@@ -242,16 +244,7 @@ export function MapScreen({ onBack, active = true }: { onBack: () => void; activ
         <div data-view="list" style={listStyle}>
           {records.length === 0 && <p style={emptyStyle}>{emptyLibrary}</p>}
           {records.map((record) => (
-            <button key={record.id} type="button" data-role="library-row" className="map-row" onClick={() => showOnMap(record.id)} style={rowStyle}>
-              <Thumbnail record={record} url={urls[record.id]} />
-              <span style={rowCopy}>
-                <span style={placeStyle}>{record.placeFull || record.placeCity || 'Unplaced'}</span>
-                <span style={metaStyle}>{formatWhen(record.capturedAt, record.timezone)}</span>
-                {record.message && <span style={noteStyle}>{record.message}</span>}
-                <span style={metaStyle}>{formatCoords(record.latitude, record.longitude)}</span>
-                <span style={metaStyle}>{libraryShareLabel(record.shares)}</span>
-              </span>
-            </button>
+            <LibraryRow key={record.id} record={record} url={urls[record.id]} onOpen={() => showOnMap(record.id)} />
           ))}
         </div>
       )}
@@ -312,6 +305,29 @@ export function MapScreen({ onBack, active = true }: { onBack: () => void; activ
   );
 }
 
+function LibraryRow({ record, url, onOpen }: { record: TransientRecord; url?: string; onOpen: () => void }) {
+  const ref = useRef<HTMLButtonElement>(null);
+  const openRef = useRef(onOpen);
+  openRef.current = onOpen;
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    return armTap(el, () => openRef.current());
+  }, []);
+  return (
+    <button ref={ref} type="button" data-role="library-row" className="map-row" style={rowStyle}>
+      <Thumbnail record={record} url={url} />
+      <span style={rowCopy}>
+        <span style={placeStyle}>{record.placeFull || record.placeCity || 'Unplaced'}</span>
+        <span style={metaStyle}>{formatWhen(record.capturedAt, record.timezone)}</span>
+        {record.message && <span style={noteStyle}>{record.message}</span>}
+        <span style={metaStyle}>{formatCoords(record.latitude, record.longitude)}</span>
+        <span style={metaStyle}>{libraryShareLabel(record.shares)}</span>
+      </span>
+    </button>
+  );
+}
+
 function Thumbnail({ record, url }: { record: TransientRecord; url?: string }) {
   if (url && record.png.size > 0) return <img src={url} alt="" style={thumb} />;
   const background = record.style?.backgroundColor || paper;
@@ -351,19 +367,6 @@ function shareLabel(entry: ShareEntry): string {
   if (entry.channel === 'email') return who ? `Email to ${who}` : 'Email';
   return who ? `Shared · ${who}` : 'Shared';
 }
-
-const backBtn: CSSProperties = {
-  width: 40,
-  height: 40,
-  flex: 'none',
-  display: 'inline-flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  border: 'none',
-  background: 'transparent',
-  padding: 0,
-  cursor: 'pointer',
-};
 
 const segment: CSSProperties = {
   display: 'flex',
@@ -489,7 +492,11 @@ const mapCss = `
   .map-body { flex: 1; min-height: 0; display: flex; flex-direction: column; }
   .map-canvas { flex: 1; min-height: 180px; }
   .map-side { max-height: 68%; overflow: auto; border-top: 1px solid ${line}; background: ${paper}; }
-  .map-row > * { pointer-events: none; }
+  .map-row { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+  .map-row img { -webkit-user-drag: none; }
+  header { overflow: visible; }
+  header button { max-width: none; overflow: visible; }
+  header svg { display: block; width: 20px; height: 20px; max-width: none; overflow: visible; flex: none; }
   .map-detail-image { max-height: 220px; object-fit: contain; background: rgba(28,27,25,0.04); }
   .maplibregl-ctrl-attrib, .maplibregl-ctrl-attrib a { font-family: ${ui}; font-weight: 400; font-size: 10px; letter-spacing: 0.02em; }
   @media (min-width: 840px) {
