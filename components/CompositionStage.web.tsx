@@ -6,6 +6,7 @@ import type { FitLineReport } from '../src/composition/fitReport';
 import { replaceFitReport } from '../src/composition/fitReport';
 import { cssFontShorthand, ensureFonts, familyReady, fontsStatus, fontSnapshots } from '../src/composition/fontReady';
 import { heroScaleToClear, scaleClearanceBox } from '../src/composition/heroClearance';
+import { fitSpreadTelemetry } from '../src/composition/telemetryFit';
 import { noteRhythm, wrapNote } from '../src/composition/note';
 import { beginFit, endFit } from '../src/composition/fitSession';
 import { isNativeShell } from '../src/native/shell';
@@ -478,6 +479,7 @@ function Footer({ node }: { node: FooterNode }) {
       )}
       {node.mark && (
         <div
+          data-role="mark"
           style={{
             ...fontCss(node.mark.font),
             fontSize: node.mark.fontSize,
@@ -533,6 +535,12 @@ function Quiet({ node }: { node: QuietNode }) {
       try {
         await ensureFonts(quietFontSpecs(node));
         if (cancelled || !ref.current || !innerRef.current) return;
+        const spread = innerRef.current.querySelector<HTMLElement>('[data-role="telemetry"]');
+        const stage = ref.current.closest('[data-stage]');
+        if (spread && stage instanceof HTMLElement && Number(spread.dataset.columns) > 1) {
+          fitSpreadTelemetry(spread, stage);
+        }
+        if (cancelled || !ref.current || !innerRef.current) return;
         const available = ref.current.clientHeight;
         const natural = innerRef.current.offsetHeight;
         const origin =
@@ -578,6 +586,7 @@ function Quiet({ node }: { node: QuietNode }) {
     >
       <div
         ref={innerRef}
+        data-role="quiet-stack"
         style={{
           width: '100%',
           display: 'flex',
@@ -676,6 +685,7 @@ function QuietPiece({ block, align }: { block: QuietBlock; align: Align }) {
   }
   if (block.kind === 'coords') {
     return (
+      <div data-role="coords" style={{ width: '100%' }}>
       <ShrinkText font={block.font} fontSize={block.fontSize} lineHeight={safeLeading(block.lineHeight, 1.15)} tracking={block.tracking} marginTop={block.marginTop}>
         {block.lines.map((line) => (
           <div key={`${line.value}${line.suffix ?? ''}`}>
@@ -685,11 +695,13 @@ function QuietPiece({ block, align }: { block: QuietBlock; align: Align }) {
           </div>
         ))}
       </ShrinkText>
+      </div>
     );
   }
   if (block.kind === 'rich-time') {
     return (
       <div
+        data-role="date"
         style={{
           ...fontCss(block.font),
           fontSize: block.fontSize,
@@ -706,6 +718,7 @@ function QuietPiece({ block, align }: { block: QuietBlock; align: Align }) {
   if (block.kind === 'meta') {
     return (
       <div
+        data-role={block.role}
         style={{
           ...fontCss(block.font),
           fontSize: block.fontSize,
@@ -830,6 +843,7 @@ function QuietPiece({ block, align }: { block: QuietBlock; align: Align }) {
     );
   }
   return (
+    <div data-role={block.kind === 'text' ? block.role : undefined}>
     <ShrinkText
       font={block.font}
       fontSize={block.fontSize}
@@ -841,13 +855,25 @@ function QuietPiece({ block, align }: { block: QuietBlock; align: Align }) {
     >
       {block.text}
     </ShrinkText>
+    </div>
   );
 }
 
-function TelemetryTable({ block, color }: { block: { lines: { id: string; label: string; values: string[] }[]; font: CssFont; fontSize: number; lineHeight: number; opacity: number }; color?: string }) {
+interface TelemetryView {
+  lines: { id: string; label: string; values: string[] }[];
+  font: CssFont;
+  fontSize: number;
+  lineHeight: number;
+  opacity: number;
+  columns?: number;
+}
+
+function TelemetryTable({ block, color }: { block: TelemetryView; color?: string }) {
+  if ((block.columns ?? 1) > 1) return <SpreadTelemetry block={block} color={color} />;
   return (
     <div
       data-role="telemetry"
+      data-columns="1"
       style={{
         ...fontCss(block.font),
         fontSize: block.fontSize,
@@ -865,6 +891,76 @@ function TelemetryTable({ block, color }: { block: { lines: { id: string; label:
     >
       {block.lines.map((line) => (
         <TelemetryRow key={line.id} line={line} />
+      ))}
+    </div>
+  );
+}
+
+function SpreadTelemetry({ block, color }: { block: TelemetryView; color?: string }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const signature = `${block.columns}|${block.fontSize}|${block.font.family}|${block.lineHeight}|${block.lines.map((line) => `${line.id}:${line.values.join(' ')}`).join('|')}`;
+  const [fitted, setFitted] = useState<{ sig: string; fontSize: number; columns: number } | null>(null);
+  const columns = fitted && fitted.sig === signature ? fitted.columns : Math.max(2, block.columns ?? 2);
+  const fontSize = fitted && fitted.sig === signature ? fitted.fontSize : block.fontSize;
+
+  useLayoutEffect(() => {
+    const node = ref.current;
+    if (!node) return;
+    let cancelled = false;
+    let settled = false;
+    beginFit();
+    const settle = () => {
+      if (settled) return;
+      settled = true;
+      try {
+        if (cancelled || !ref.current) return;
+        const stage = ref.current.closest('[data-stage]');
+        if (!(stage instanceof HTMLElement)) return;
+        const next = fitSpreadTelemetry(ref.current, stage);
+        if (!cancelled) setFitted({ sig: signature, fontSize: next.fontSize, columns: next.columns });
+      } finally {
+        endFit();
+      }
+    };
+    ensureFonts([cssFontShorthand(block.font, block.fontSize), cssFontShorthand(block.font, 11)])
+      .then(() => nextFrame().then(() => settle()))
+      .catch(() => settle());
+    return () => {
+      cancelled = true;
+    };
+  }, [signature]);
+
+  return (
+    <div
+      ref={ref}
+      data-role="telemetry"
+      data-columns={columns}
+      data-font-size={fontSize}
+      style={{
+        ...fontCss(block.font),
+        fontSize,
+        lineHeight: safeLeading(block.lineHeight),
+        opacity: block.opacity,
+        color,
+        fontFeatureSettings: '"tnum" 1',
+        fontVariantNumeric: 'tabular-nums',
+        display: 'grid',
+        gridTemplateColumns: `repeat(${columns}, max-content)`,
+        justifyContent: 'space-between',
+        columnGap: '1.35em',
+        width: '100%',
+        minWidth: 0,
+      }}
+    >
+      {block.lines.map((line) => (
+        <div
+          key={line.id}
+          data-telemetry-row={line.id}
+          style={{ display: 'flex', alignItems: 'baseline', gap: '0.7em', minWidth: 0 }}
+        >
+          <span style={{ letterSpacing: '0.12em', flex: 'none', whiteSpace: 'nowrap' }}>{line.label}</span>
+          <span style={{ whiteSpace: 'nowrap' }}>{line.values.join(' ')}</span>
+        </div>
       ))}
     </div>
   );
@@ -942,6 +1038,7 @@ function ShrinkText({
 function Mark({ node }: { node: MarkNode }) {
   return (
     <div
+      data-role="mark"
       style={{
         position: 'absolute',
         left: node.left,
@@ -973,6 +1070,7 @@ function NoteLines({ text, fontSize, maxWidth, family }: { text: string; fontSiz
 function Kicker({ node }: { node: KickerNode }) {
   return (
     <div
+      data-role="kicker"
       style={{
         position: 'absolute',
         left: node.left,
@@ -996,6 +1094,7 @@ function Kicker({ node }: { node: KickerNode }) {
 function HeaderSplit({ node }: { node: HeaderSplitNode }) {
   return (
     <div
+      data-role="header-split"
       style={{
         position: 'absolute',
         left: node.left,
