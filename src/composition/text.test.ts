@@ -48,4 +48,43 @@ describe('poster clock', () => {
     };
     expect(quietLine()).toBe(expected);
   });
+
+  it('reads en-GB when the en-US 24-hour clock is blank', () => {
+    const expected = quietLine();
+    const Real = Intl.DateTimeFormat;
+    function Wrapped(locale?: Intl.LocalesArgument, options?: Intl.DateTimeFormatOptions) {
+      const fmt = new Real(locale, options);
+      const format = fmt.format.bind(fmt);
+      const parts = fmt.formatToParts.bind(fmt);
+      return new Proxy(fmt, {
+        get(target, prop, receiver) {
+          if (prop === 'formatToParts') {
+            return (date?: number | Date) => {
+              const resolved = target.resolvedOptions();
+              if (resolved.hourCycle === 'h23' && !resolved.timeZoneName) return [{ type: 'literal', value: ':' }];
+              const all = parts(date);
+              if (resolved.hour12) return all.filter((part) => part.type !== 'hour' && part.type !== 'minute' && part.type !== 'timeZoneName');
+              return all;
+            };
+          }
+          if (prop === 'format') {
+            return (date?: number | Date) => {
+              const resolved = target.resolvedOptions();
+              if (resolved.hourCycle === 'h23' && !resolved.timeZoneName && String(resolved.locale).startsWith('en-US')) return '';
+              return format(date);
+            };
+          }
+          const value = Reflect.get(target, prop, receiver);
+          return typeof value === 'function' ? value.bind(target) : value;
+        },
+      });
+    }
+    Intl.DateTimeFormat = Wrapped as unknown as typeof Intl.DateTimeFormat;
+    try {
+      expect(quietLine()).toBe(expected);
+      expect(renderToken('time-zone', exampleMoment(at), '')).toMatch(/^10:29 AM (PDT|GMT-7)$/);
+    } finally {
+      Intl.DateTimeFormat = Real;
+    }
+  });
 });

@@ -6,11 +6,26 @@ import { Icon } from './Icons';
 import { publicAssetUrl } from '../src/web/publicUrl';
 import { ink, line, muted, paper, ui } from './theme';
 import { clusterTransients } from '../src/map/cluster';
-import { isNativeShell, SHELL_HEADER_PADDING_RIGHT } from '../src/native/shell';
+import { openLibraryRow, panelShowsIndex, selectMapPin } from '../src/map/libraryDetail';
+import { SHELL_HEADER_PADDING_RIGHT, useNativeShell } from '../src/native/shell';
 
 const STYLE_URL = 'https://tiles.openfreemap.org/styles/positron';
 
+function useLibraryWidth(): number {
+  const [width, setWidth] = useState(() => (typeof window === 'undefined' ? 1200 : window.innerWidth));
+  useEffect(() => {
+    const apply = () => setWidth(window.innerWidth);
+    apply();
+    window.addEventListener('resize', apply);
+    return () => window.removeEventListener('resize', apply);
+  }, []);
+  return width;
+}
+
 export function MapScreen({ onBack, active = true }: { onBack: () => void; active?: boolean }) {
+  const shell = useNativeShell();
+  const libraryWidth = useLibraryWidth();
+  const showIndex = panelShowsIndex(libraryWidth);
   const hostRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MapLibre | null>(null);
   const [mapReady, setMapReady] = useState(false);
@@ -138,7 +153,10 @@ export function MapScreen({ onBack, active = true }: { onBack: () => void; activ
         dot.style.boxShadow = '0 0 0 4px rgba(28,27,25,0.12)';
         dot.style.cursor = 'pointer';
         const marker = new Marker({ element: dot }).setLngLat([record.longitude, record.latitude]).addTo(map);
-        dot.addEventListener('click', () => setSelectedId(record.id));
+        armPin(dot, () => {
+          const next = selectMapPin(record.id);
+          setSelectedId(next.selectedId);
+        });
         markers.push(marker);
       }
     };
@@ -177,10 +195,17 @@ export function MapScreen({ onBack, active = true }: { onBack: () => void; activ
   }, [view, mapReady, records]);
 
   function showOnMap(id: string) {
-    focusRef.current = id;
-    setSelectedId(id);
-    setView('map');
+    const next = openLibraryRow(id);
+    focusRef.current = next.focusId;
+    setSelectedId(next.selectedId);
+    setView(next.view);
   }
+
+  useEffect(() => {
+    if (view !== 'map') return;
+    const side = document.querySelector('.map-side');
+    if (side instanceof HTMLElement) side.scrollTop = 0;
+  }, [selectedId, view]);
 
   const selected = records.find((record) => record.id === selectedId) ?? null;
 
@@ -195,13 +220,15 @@ export function MapScreen({ onBack, active = true }: { onBack: () => void; activ
           gap: 8,
           padding: '0 12px 0 8px',
           flex: 'none',
-          ...(isNativeShell() ? { paddingRight: SHELL_HEADER_PADDING_RIGHT } : {}),
+          minWidth: 0,
+          overflow: 'hidden',
+          ...(shell ? { paddingRight: SHELL_HEADER_PADDING_RIGHT } : {}),
         }}
       >
         <button type="button" aria-label="Back" onClick={onBack} style={backBtn}>
           <Icon name="back" size={20} color={ink} />
         </button>
-        <div style={{ flex: 1, minWidth: 0, fontFamily: ui, fontWeight: 500, fontSize: 18, letterSpacing: '0.02em' }}>My transients</div>
+        <div style={{ flex: 1, minWidth: 0, overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis', fontFamily: ui, fontWeight: 500, fontSize: 18, letterSpacing: '0.02em' }}>My transients</div>
         <div role="group" aria-label="Library view" style={segment}>
           <button type="button" aria-pressed={view === 'map'} onClick={() => setView('map')} style={segmentButton(view === 'map')}>
             Map
@@ -215,7 +242,7 @@ export function MapScreen({ onBack, active = true }: { onBack: () => void; activ
         <div data-view="list" style={listStyle}>
           {records.length === 0 && <p style={emptyStyle}>{emptyLibrary}</p>}
           {records.map((record) => (
-            <button key={record.id} type="button" data-role="library-row" onClick={() => showOnMap(record.id)} style={rowStyle}>
+            <button key={record.id} type="button" data-role="library-row" className="map-row" onClick={() => showOnMap(record.id)} style={rowStyle}>
               <Thumbnail record={record} url={urls[record.id]} />
               <span style={rowCopy}>
                 <span style={placeStyle}>{record.placeFull || record.placeCity || 'Unplaced'}</span>
@@ -232,31 +259,36 @@ export function MapScreen({ onBack, active = true }: { onBack: () => void; activ
         <div ref={hostRef} className="map-canvas" />
         <aside className="map-side">
           {records.length === 0 && <p style={emptyStyle}>{emptyLibrary}</p>}
-          {records.map((record) => (
-            <button
-              key={record.id}
-              type="button"
-              onClick={() => setSelectedId(record.id)}
-              style={{
-                display: 'block',
-                width: '100%',
-                textAlign: 'left',
-                border: 'none',
-                borderBottom: `1px solid ${line}`,
-                background: record.id === selectedId ? 'rgba(28,27,25,0.04)' : 'transparent',
-                padding: '12px 16px',
-                cursor: 'pointer',
-                color: ink,
-              }}
-            >
-              <div style={{ fontFamily: ui, fontWeight: 500, fontSize: 16 }}>{record.message || 'No note'}</div>
-              <div style={{ fontFamily: ui, fontWeight: 400, fontSize: 12, letterSpacing: '0.02em', color: muted, marginTop: 4 }}>{formatWhen(record.capturedAt, record.timezone)}</div>
-            </button>
-          ))}
+          {showIndex &&
+            records.map((record) => (
+              <button
+                key={record.id}
+                type="button"
+                className="map-row"
+                onClick={() => {
+                  const next = selectMapPin(record.id);
+                  setSelectedId(next.selectedId);
+                }}
+                style={{
+                  display: 'block',
+                  width: '100%',
+                  textAlign: 'left',
+                  border: 'none',
+                  borderBottom: `1px solid ${line}`,
+                  background: record.id === selectedId ? 'rgba(28,27,25,0.04)' : 'transparent',
+                  padding: '12px 16px',
+                  cursor: 'pointer',
+                  color: ink,
+                }}
+              >
+                <div style={{ fontFamily: ui, fontWeight: 500, fontSize: 16 }}>{record.message || 'No note'}</div>
+                <div style={{ fontFamily: ui, fontWeight: 400, fontSize: 12, letterSpacing: '0.02em', color: muted, marginTop: 4 }}>{formatWhen(record.capturedAt, record.timezone)}</div>
+              </button>
+            ))}
           {selected && (
-            <div style={{ padding: 16 }}>
+            <div data-role="library-detail" data-record={selected.id} style={{ padding: 16 }}>
               {urls[selected.id] && selected.png.size > 0 && (
-                <img src={urls[selected.id]} alt="" style={{ width: '100%', height: 'auto', boxShadow: '0 0 0 1px rgba(28,27,25,0.14)' }} />
+                <img src={urls[selected.id]} alt="" className="map-detail-image" style={{ width: '100%', height: 'auto', boxShadow: '0 0 0 1px rgba(28,27,25,0.14)' }} />
               )}
               <p style={{ fontFamily: ui, fontWeight: 500, fontSize: 18, margin: '14px 0 6px' }}>{selected.message || 'No note'}</p>
               <p style={{ fontFamily: ui, fontWeight: 400, fontSize: 13, color: muted, margin: 0 }}>{formatWhen(selected.capturedAt, selected.timezone)}</p>
@@ -323,6 +355,7 @@ function shareLabel(entry: ShareEntry): string {
 const backBtn: CSSProperties = {
   width: 40,
   height: 40,
+  flex: 'none',
   display: 'inline-flex',
   alignItems: 'center',
   justifyContent: 'center',
@@ -376,6 +409,7 @@ const rowStyle: CSSProperties = {
   padding: '12px 16px',
   cursor: 'pointer',
   color: ink,
+  touchAction: 'manipulation',
 };
 
 const rowCopy: CSSProperties = {
@@ -433,14 +467,35 @@ const emptyStyle: CSSProperties = {
   margin: 0,
 };
 
+function armPin(dot: HTMLElement, select: () => void) {
+  let touched = false;
+  dot.addEventListener('touchend', (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    touched = true;
+    select();
+  });
+  dot.addEventListener('click', (event) => {
+    event.stopPropagation();
+    if (touched) {
+      touched = false;
+      return;
+    }
+    select();
+  });
+}
+
 const mapCss = `
   .map-body { flex: 1; min-height: 0; display: flex; flex-direction: column; }
-  .map-canvas { flex: 1; min-height: 240px; }
-  .map-side { max-height: 46%; overflow: auto; border-top: 1px solid ${line}; background: ${paper}; }
+  .map-canvas { flex: 1; min-height: 180px; }
+  .map-side { max-height: 68%; overflow: auto; border-top: 1px solid ${line}; background: ${paper}; }
+  .map-row > * { pointer-events: none; }
+  .map-detail-image { max-height: 220px; object-fit: contain; background: rgba(28,27,25,0.04); }
   .maplibregl-ctrl-attrib, .maplibregl-ctrl-attrib a { font-family: ${ui}; font-weight: 400; font-size: 10px; letter-spacing: 0.02em; }
   @media (min-width: 840px) {
     .map-body { flex-direction: row; }
     .map-canvas { min-height: 0; }
     .map-side { width: 380px; max-height: none; border-top: none; border-left: 1px solid ${line}; }
+    .map-detail-image { max-height: none; object-fit: fill; background: transparent; }
   }
 `;

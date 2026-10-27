@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import { WEB_SOURCE, type WebCommand } from './protocol';
 
 export const NATIVE_LOCATION_EVENT = 'transient-native-location';
@@ -19,11 +20,33 @@ export function isNativeShell(): boolean {
 }
 
 /**
- * Expo Go floats its own dev-tools button, a circle about 70px across, over the top-right of the page.
- * The page cannot remove it. Headers inside the shell keep their right-hand controls clear of that circle.
+ * Expo Go floats a 44pt blue gear, 10pt from the trailing edge, with a stroke and shadow.
+ * Headers inside the shell keep their right-hand controls clear of that button.
  * A browser tab does not use this padding.
  */
-export const SHELL_HEADER_PADDING_RIGHT = 'max(88px, env(safe-area-inset-right))';
+export const SHELL_HEADER_PADDING_RIGHT = 'max(96px, env(safe-area-inset-right))';
+
+/** The bridge can appear after the first paint. Keep checking until the header can move. */
+export function useNativeShell(): boolean {
+  const [shell, setShell] = useState(isNativeShell);
+  useEffect(() => {
+    if (isNativeShell()) {
+      setShell(true);
+      return;
+    }
+    const id = window.setInterval(() => {
+      if (!isNativeShell()) return;
+      setShell(true);
+      window.clearInterval(id);
+    }, 250);
+    const stop = window.setTimeout(() => window.clearInterval(id), 3000);
+    return () => {
+      window.clearInterval(id);
+      window.clearTimeout(stop);
+    };
+  }, []);
+  return shell;
+}
 
 export function postToNative(message: WebCommand): void {
   bridge()?.postMessage(JSON.stringify({ source: WEB_SOURCE, ...message }));

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { fittedInkWidth, fitLine, type ProbeMetrics } from './fit';
+import { chooseVertical, fittedInkWidth, fitLine, metricsForFit, placeLineBox, type ProbeMetrics } from './fit';
 
 const probe: ProbeMetrics = {
   probeSize: 200,
@@ -48,6 +48,53 @@ describe('fitLine', () => {
     expect(fitted.height).toBeCloseTo(fitted.fontSize * 0.92, 5);
     expect(fitted.shiftTop).toBe(0);
     expect(fitted.shiftLeft).toBe(0);
+  });
+
+  it('ignores a canvas width that is many times the DOM advance', () => {
+    const wild: ProbeMetrics = {
+      ...probe,
+      advanceWidth: 400,
+      domAdvanceWidth: 400,
+      actualBoundingBoxLeft: 1600,
+      actualBoundingBoxRight: 1600,
+    };
+    const fitted = metricsForFit(wild);
+    expect(fitted.actualBoundingBoxLeft).toBe(0);
+    expect(fitted.actualBoundingBoxRight).toBe(400);
+    expect(fitLine(fitted, 900).fontSize).toBeGreaterThan(fitLine(wild, 900).fontSize * 3);
+  });
+
+  it('keeps the desktop ink crop when the baseline matches the canvas', () => {
+    const shoulders: ProbeMetrics = {
+      probeSize: 200,
+      advanceWidth: 200,
+      domAdvanceWidth: 200,
+      actualBoundingBoxLeft: 0,
+      actualBoundingBoxRight: 200,
+      actualBoundingBoxAscent: 162,
+      actualBoundingBoxDescent: 2,
+      fontBoundingBoxAscent: 197,
+      fontBoundingBoxDescent: 43,
+    };
+    const fitted = fitLine(shoulders, 200);
+    const box = placeLineBox({ fontSize: fitted.fontSize, probeSize: 200, baseline: 177, ascent: 162, descent: 2 });
+    expect(box.crop).toBe(true);
+    expect(box.height).toBeCloseTo(fitted.height, 5);
+    expect(box.shiftTop).toBeCloseTo(fitted.shiftTop, 5);
+  });
+
+  it('uses painted pixels when the canvas box is too short to trust', () => {
+    const chosen = chooseVertical(200, { ascent: 80, descent: 2, fontAscent: 197 }, { ascent: 162, descent: 2 });
+    expect(chosen).toEqual({ ascent: 162, descent: 2 });
+    const box = placeLineBox({ fontSize: 200, probeSize: 200, baseline: 177, ascent: chosen?.ascent ?? null, descent: chosen?.descent ?? null });
+    expect(box.height).toBeCloseTo(164, 5);
+    expect(box.crop).toBe(true);
+  });
+
+  it('does not crop when neither reading describes the glyphs', () => {
+    expect(chooseVertical(200, { ascent: 0, descent: 0, fontAscent: 0 }, null)).toBeNull();
+    const box = placeLineBox({ fontSize: 180, probeSize: 200, baseline: null, ascent: null, descent: null });
+    expect(box).toEqual({ height: 180, shiftTop: 0, crop: false });
   });
 
   it('survives a zero ink measurement', () => {
