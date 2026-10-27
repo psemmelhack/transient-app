@@ -1,76 +1,43 @@
 import { Asset } from 'expo-asset';
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
+import { installWebBundleWith, type InstalledWebBundle, type WebBundleManifest } from './webBundleInstall';
 
-export interface WebBundleManifest {
-  revision: string;
-  files: Record<string, number>;
-}
+export type { InstalledWebBundle, WebBundleManifest };
 
-/** The app tsconfig resolves the web filesystem stub. Native builds have these methods. */
-interface CacheFile {
-  exists: boolean;
-  uri: string;
-  text(): Promise<string>;
-  delete(): void;
-  create(): void;
-  write(content: Uint8Array): Promise<void>;
-}
-
-interface CacheDirectory {
-  exists: boolean;
-  uri: string;
-  create(options?: { intermediates?: boolean; idempotent?: boolean }): void;
-}
-
-const FileCtor = FileSystem.File as unknown as new (parent: unknown, name: string) => CacheFile;
-const DirectoryCtor = FileSystem.Directory as unknown as new (parent: unknown, name?: string) => CacheDirectory;
-
-function cacheFile(parent: unknown, name: string): CacheFile {
-  return new FileCtor(parent, name);
-}
-
-function cacheDir(parent: unknown, name?: string): CacheDirectory {
-  return new DirectoryCtor(parent, name);
-}
-
-/** Copy the shipped web export into the cache and return the HTML plus its base URL. */
-export async function installWebBundle(manifest: WebBundleManifest): Promise<{ html: string; baseUrl: string }> {
-  if (!manifest.revision || !Object.keys(manifest.files).length) {
-    throw new Error('The web bundle is empty');
-  }
-  const root = cacheDir(FileSystem.Paths.cache, `transient-web-${manifest.revision}`);
-  if (!root.exists) root.create({ intermediates: true, idempotent: true });
-  const index = cacheFile(root, 'index.html');
-  const stamp = cacheFile(root, '.revision');
-  const ready = stamp.exists && index.exists && (await stamp.text()) === manifest.revision;
-  if (!ready) {
-    for (const [relative, moduleId] of Object.entries(manifest.files)) {
+/**
+ * Install the embedded page into the legacy cache directory.
+ * That URI is the one Expo Go already grants to WKWebView. The new File API can
+ * hand back `/var` while the cache Expo Go knows is `/private/var`, and the page
+ * then cannot read its own scripts. Android also cannot read those files with fetch.
+ */
+export function installWebBundle(manifest: WebBundleManifest, updateId?: string | null): Promise<InstalledWebBundle> {
+  return installWebBundleWith(
+    manifest,
+    updateId ?? null,
+    {
+      cacheDirectory: FileSystem.cacheDirectory,
+      getInfoAsync: (uri) => FileSystem.getInfoAsync(uri),
+      readAsStringAsync: (uri) => FileSystem.readAsStringAsync(uri),
+      writeAsStringAsync: (uri, contents) => FileSystem.writeAsStringAsync(uri, contents),
+      deleteAsync: (uri, options) => FileSystem.deleteAsync(uri, options),
+      makeDirectoryAsync: (uri, options) => FileSystem.makeDirectoryAsync(uri, options),
+      copyAsync: (options) => FileSystem.copyAsync(options),
+      downloadAsync: async (uri, fileUri) => {
+        const result = await FileSystem.downloadAsync(uri, fileUri);
+        return { status: result.status };
+      },
+    },
+    (moduleId) => {
       const asset = Asset.fromModule(moduleId);
-      await asset.downloadAsync();
-      const sourceUri = asset.localUri ?? asset.uri;
-      if (!sourceUri) throw new Error(`Missing ${relative}`);
-      ensureParent(root, relative);
-      const dest = cacheFile(root, relative);
-      const response = await fetch(sourceUri);
-      if (!response.ok) throw new Error(`Could not read ${relative}`);
-      const bytes = new Uint8Array(await response.arrayBuffer());
-      if (dest.exists) dest.delete();
-      dest.create();
-      await dest.write(bytes);
-    }
-    if (stamp.exists) stamp.delete();
-    stamp.create();
-    await stamp.write(new TextEncoder().encode(manifest.revision));
-  }
-  const baseUrl = root.uri.endsWith('/') ? root.uri : `${root.uri}/`;
-  return { html: await index.text(), baseUrl };
-}
-
-function ensureParent(root: CacheDirectory, relative: string): void {
-  const parts = relative.split('/').slice(0, -1);
-  let current: CacheDirectory = root;
-  for (const part of parts) {
-    current = cacheDir(current, part);
-    if (!current.exists) current.create();
-  }
+      return {
+        downloadAsync: () => asset.downloadAsync(),
+        get localUri() {
+          return asset.localUri;
+        },
+        get uri() {
+          return asset.uri;
+        },
+      };
+    },
+  );
 }

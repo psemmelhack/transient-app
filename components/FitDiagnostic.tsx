@@ -1,6 +1,9 @@
-import { useSyncExternalStore, type CSSProperties } from 'react';
+import { useEffect, useState, useSyncExternalStore, type CSSProperties } from 'react';
 import { fontsStatus, fontSnapshots } from '../src/composition/fontReady';
 import { getFitStore, setDiagnosticOpen, subscribeFitStore, type FitLineReport } from '../src/composition/fitReport';
+import { formatBuildStamp, normalizeBuild, readInjectedBuild, type BuildFacts } from '../src/native/buildStamp';
+import { NATIVE_BUILD_EVENT } from '../src/native/protocol';
+import { onNativeEvent, useNativeShell } from '../src/native/shell';
 import { ink, paper } from './theme';
 
 function round(value: number | null): string {
@@ -44,9 +47,25 @@ function body(lines: FitLineReport[]): string {
   ].join('\n');
 }
 
-/** Hidden until a triple-tap on the poster. Shows the font load and the line metrics. */
+function useBuildStamp(): string {
+  const shell = useNativeShell();
+  const [native, setNative] = useState<BuildFacts | null>(() => readInjectedBuild());
+  useEffect(() => {
+    const current = readInjectedBuild();
+    if (current) setNative(current);
+    return onNativeEvent<unknown>(NATIVE_BUILD_EVENT, (detail) => {
+      const next = normalizeBuild(detail) ?? readInjectedBuild();
+      if (next) setNative(next);
+    });
+  }, []);
+  if (!shell) return formatBuildStamp({ platform: 'web' });
+  return formatBuildStamp({ platform: 'native', update: native });
+}
+
+/** Hidden until a triple-tap on the poster. Shows which build this is, then the font load and the line metrics. */
 export function FitDiagnostic() {
   const store = useSyncExternalStore(subscribeFitStore, getFitStore, getFitStore);
+  const stamp = useBuildStamp();
   if (!store.open) return null;
   const agent = typeof navigator === 'undefined' ? '' : navigator.userAgent;
   return (
@@ -57,6 +76,9 @@ export function FitDiagnostic() {
           Close
         </button>
       </div>
+      <pre data-role="build-stamp" style={stampStyle}>
+        {stamp}
+      </pre>
       <pre style={text}>{body(store.lines)}</pre>
       {agent && <div style={agentStyle}>{agent}</div>}
     </div>
@@ -105,6 +127,11 @@ const text: CSSProperties = {
   fontFamily: 'IBM Plex Mono, ui-monospace, monospace',
   fontSize: 11,
   lineHeight: 1.45,
+};
+
+const stampStyle: CSSProperties = {
+  ...text,
+  marginBottom: 10,
 };
 
 const agentStyle: CSSProperties = {

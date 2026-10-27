@@ -6,6 +6,7 @@ import { MapScreen } from './components/MapScreen';
 import { Proof } from './components/Proof';
 import { StyleProvider } from './components/StyleContext';
 import { ink, paper, ui } from './components/theme';
+import { isNativeShell, postToNative } from './src/native/shell';
 import { consumeStashedImport, importTransients, MIGRATE_ORIGIN, publishImportNotice, stashLocationImport, watchImportNotice, type ImportPayload } from './src/storage/import';
 
 function query(): { proof: string | null; fixture: boolean } {
@@ -25,6 +26,10 @@ export default function App() {
   });
 
   useEffect(() => watchImportNotice(setToast), []);
+
+  useEffect(() => {
+    if (isNativeShell()) postToNative({ type: 'ready' });
+  }, []);
 
   useEffect(() => {
     if (!toast) return;

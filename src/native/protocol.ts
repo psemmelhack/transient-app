@@ -1,5 +1,8 @@
 export const WEB_SOURCE = 'transient-web' as const;
 
+/** The shell posts the running Expo update and the embedded pack on this event. */
+export const NATIVE_BUILD_EVENT = 'transient-native-build';
+
 export interface ShellPlace {
   city: string | null;
   region: string | null;
