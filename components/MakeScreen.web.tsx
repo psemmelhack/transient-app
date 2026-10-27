@@ -20,12 +20,13 @@ import { Icon } from './Icons';
 import { Parameters } from './Parameters';
 import { useStyle } from './StyleContext';
 import { captureLabel, capturedToast, libraryMissToast, savedToDownloads, sharedWithLabel } from '../src/ui/actions';
-import { isNativeShell, SHELL_HEADER_PADDING_RIGHT } from '../src/native/shell';
+import { SHELL_HEADER_PADDING_RIGHT, useNativeShell } from '../src/native/shell';
 import { ink, line, muted, paper, ui } from './theme';
 
 const NOTE_LIMIT = 200;
 
 export function MakeScreen({ onMap, fixture = false }: { onMap: () => void; fixture?: boolean }) {
+  const shell = useNativeShell();
   const { style, update, randomize, undo, canUndo } = useStyle();
   const { moment, now, retry } = useMoment(fixture);
   const telemetryOn = isTelemetryEnabled(style.measurements);
@@ -228,9 +229,9 @@ export function MakeScreen({ onMap, fixture = false }: { onMap: () => void; fixt
       <style>{chromeCss}</style>
       <div ref={scrollerRef} onScroll={onScroll} style={scrollerStyle}>
         <div ref={pinRef} style={{ ...pinStyle, height: box.pinHeight }}>
-          <header style={isNativeShell() ? { ...headerStyle, paddingRight: SHELL_HEADER_PADDING_RIGHT } : headerStyle}>
-            <div style={{ fontFamily: ui, fontWeight: 500, fontSize: 20, letterSpacing: '0.04em' }}>Transient</div>
-            <div style={{ display: 'flex', alignItems: 'center' }}>
+          <header style={shell ? { ...headerStyle, paddingRight: SHELL_HEADER_PADDING_RIGHT } : headerStyle}>
+            <div style={titleStyle}>Transient</div>
+            <div style={iconRow}>
               <button type="button" aria-label="Undo" onClick={undo} style={{ ...iconBtn, opacity: canUndo ? 1 : 0, pointerEvents: canUndo ? 'auto' : 'none' }}>
                 <Icon name="undo" size={20} color={ink} />
               </button>
@@ -380,11 +381,34 @@ const headerStyle: CSSProperties = {
   paddingLeft: 'max(22px, env(safe-area-inset-left))',
   paddingRight: 'max(12px, env(safe-area-inset-right))',
   boxSizing: 'border-box',
+  minWidth: 0,
+  overflow: 'hidden',
+};
+
+const titleStyle: CSSProperties = {
+  flex: 1,
+  minWidth: 0,
+  overflow: 'hidden',
+  whiteSpace: 'nowrap',
+  textOverflow: 'ellipsis',
+  fontFamily: ui,
+  fontWeight: 500,
+  fontSize: 20,
+  letterSpacing: '0.04em',
+};
+
+const iconRow: CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  flex: 'none',
 };
 
 const iconBtn: CSSProperties = {
   width: 40,
   height: 40,
+  minWidth: 40,
+  flex: 'none',
+  overflow: 'hidden',
   display: 'inline-flex',
   alignItems: 'center',
   justifyContent: 'center',

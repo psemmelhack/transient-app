@@ -1,8 +1,8 @@
 import { forwardRef, memo, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import type { CssFont } from '../src/composition/fonts';
 import { fontCss } from '../src/composition/fonts';
-import { fitLine, verticalMetricsTrusted, type ProbeMetrics } from '../src/composition/fit';
-import { cssFontShorthand, ensureFonts } from '../src/composition/fontReady';
+import { chooseVertical, fitLine, metricsForFit, placeLineBox, verticalMetricsTrusted, type ProbeMetrics } from '../src/composition/fit';
+import { cssFontShorthand, ensureFonts, familyReady } from '../src/composition/fontReady';
 import { heroScaleToClear, scaleClearanceBox } from '../src/composition/heroClearance';
 import { noteRhythm, wrapNote } from '../src/composition/note';
 import { beginFit, endFit } from '../src/composition/fitSession';
@@ -124,6 +124,7 @@ interface RowFit {
   height: number;
   shiftTop: number;
   shiftLeft: number;
+  crop: boolean;
 }
 
 function fitSignature(node: FitStackNode): string {
@@ -136,11 +137,13 @@ const FitStack = memo(
     const signature = fitSignature(node);
     const [rows, setRows] = useState<RowFit[]>([]);
     const [gap, setGap] = useState(node.gap);
+    const [fontEpoch, setFontEpoch] = useState(0);
 
     useLayoutEffect(() => {
       const root = ref.current;
       if (!root || node.lines.length === 0) return;
       let cancelled = false;
+      let detachFont = () => {};
       beginFit();
       (async () => {
         try {
@@ -167,14 +170,22 @@ const FitStack = memo(
           if (cancelled) return;
           setRows(fitted);
           setGap(fittedGap);
+          if (!familyReady(node.font.family) && document.fonts?.addEventListener) {
+            const onDone = () => {
+              if (!cancelled && familyReady(node.font.family)) setFontEpoch((epoch) => epoch + 1);
+            };
+            document.fonts.addEventListener('loadingdone', onDone);
+            detachFont = () => document.fonts.removeEventListener('loadingdone', onDone);
+          }
         } finally {
           endFit();
         }
       })();
       return () => {
         cancelled = true;
+        detachFont();
       };
-    }, [signature, node.align, node.lines, node.font, node.leading, node.gap]);
+    }, [signature, node.align, node.lines, node.font, node.leading, node.gap, fontEpoch]);
 
     return (
       <div
@@ -202,7 +213,7 @@ const FitStack = memo(
               style={{
                 lineHeight: 1,
                 whiteSpace: 'nowrap',
-                overflow: 'hidden',
+                overflow: fit?.crop === false ? 'visible' : 'hidden',
                 fontSize: fit?.fontSize,
                 height: fit?.height,
               }}
@@ -240,7 +251,7 @@ function applyRows(root: HTMLElement, rows: RowFit[], gap: number) {
     el.style.fontSize = `${row.fontSize}px`;
     el.style.height = `${row.height}px`;
     el.style.lineHeight = '1';
-    el.style.overflow = 'hidden';
+    el.style.overflow = row.crop ? 'hidden' : 'visible';
     const span = el.firstElementChild;
     if (span instanceof HTMLElement) {
       span.style.top = `${row.shiftTop}px`;
@@ -253,13 +264,13 @@ async function fitRow(row: HTMLElement, text: string, targetWidth: number, font:
   const probe = 200;
   const spec = cssFontShorthand(font, probe);
   await ensureFonts([spec]);
-  if (!measureCanvas) measureCanvas = document.createElement('canvas');
-  const ctx = measureCanvas.getContext('2d');
-  const fallback: RowFit = { text, fontSize: probe, height: Math.max(1, probe * leading), shiftTop: 0, shiftLeft: 0 };
+  const ctx = measureContext();
+  const fallback: RowFit = { text, fontSize: probe, height: Math.max(1, probe), shiftTop: 0, shiftLeft: 0, crop: false };
   if (!ctx) return fallback;
   row.style.fontSize = `${probe}px`;
   row.style.lineHeight = '1';
   row.style.height = 'auto';
+  row.style.overflow = 'visible';
   const span = row.firstElementChild instanceof HTMLElement ? row.firstElementChild : null;
   if (span) {
     span.style.display = 'inline-block';
@@ -268,6 +279,7 @@ async function fitRow(row: HTMLElement, text: string, targetWidth: number, font:
     span.textContent = text;
   }
   const domW = span?.offsetWidth || 1;
+  const baseline = span ? baselineOffset(span) : null;
   ctx.font = spec;
   const measured = ctx.measureText(text);
   const advance = measured.width || domW;
@@ -277,7 +289,7 @@ async function fitRow(row: HTMLElement, text: string, targetWidth: number, font:
     left = 0;
     right = advance;
   }
-  const metrics: ProbeMetrics = {
+  const metrics: ProbeMetrics = metricsForFit({
     probeSize: probe,
     advanceWidth: advance,
     domAdvanceWidth: domW,
@@ -287,9 +299,87 @@ async function fitRow(row: HTMLElement, text: string, targetWidth: number, font:
     actualBoundingBoxDescent: finiteBox(measured.actualBoundingBoxDescent),
     fontBoundingBoxAscent: finiteBox(measured.fontBoundingBoxAscent),
     fontBoundingBoxDescent: finiteBox(measured.fontBoundingBoxDescent),
-  };
+  });
   const fitted = fitLine(metrics, targetWidth, { leading, trusted: verticalMetricsTrusted(metrics) });
-  return { text, fontSize: fitted.fontSize, height: fitted.height, shiftTop: fitted.shiftTop, shiftLeft: fitted.shiftLeft };
+  const pixels = paintedInk(ctx, spec, text, probe);
+  const vertical = chooseVertical(
+    probe,
+    {
+      ascent: metrics.actualBoundingBoxAscent,
+      descent: metrics.actualBoundingBoxDescent,
+      fontAscent: metrics.fontBoundingBoxAscent,
+    },
+    pixels,
+  );
+  const box = placeLineBox({
+    fontSize: fitted.fontSize,
+    probeSize: probe,
+    baseline,
+    ascent: vertical?.ascent ?? null,
+    descent: vertical?.descent ?? null,
+  });
+  return { text, fontSize: fitted.fontSize, height: box.height, shiftTop: box.shiftTop, shiftLeft: fitted.shiftLeft, crop: box.crop };
+}
+
+function measureContext(): CanvasRenderingContext2D | null {
+  if (!measureCanvas) {
+    measureCanvas = document.createElement('canvas');
+    measureCanvas.setAttribute('aria-hidden', 'true');
+    measureCanvas.style.cssText = 'position:fixed;left:-12000px;top:0;pointer-events:none';
+  }
+  if (!measureCanvas.isConnected) document.body.appendChild(measureCanvas);
+  return measureCanvas.getContext('2d');
+}
+
+/**
+ * Where this browser sits the alphabetic baseline inside a line-height of 1, in layout pixels.
+ * offsetTop ignores the stage's CSS scale, which getBoundingClientRect would fold in.
+ */
+function baselineOffset(span: HTMLElement): number | null {
+  const probe = document.createElement('span');
+  probe.setAttribute('data-baseline', '');
+  probe.style.cssText = 'display:inline-block;width:0;height:0;vertical-align:baseline;';
+  span.insertBefore(probe, span.firstChild);
+  const baseline = probe.offsetTop;
+  const line = span.offsetHeight;
+  probe.remove();
+  if (line < 1 || !(baseline > 0)) return null;
+  return baseline;
+}
+
+/** Ink above and below the alphabetic baseline, from the pixels canvas actually paints. */
+function paintedInk(ctx: CanvasRenderingContext2D, spec: string, text: string, probe: number): { ascent: number; descent: number } | null {
+  const canvas = ctx.canvas;
+  const width = Math.min(4096, Math.max(64, Math.ceil(ctx.measureText(text).width) + 32));
+  const height = probe * 3;
+  if (canvas.width !== width) canvas.width = width;
+  if (canvas.height !== height) canvas.height = height;
+  ctx.font = spec;
+  ctx.textBaseline = 'alphabetic';
+  ctx.fillStyle = '#000';
+  ctx.clearRect(0, 0, width, height);
+  const origin = Math.round(probe * 1.4);
+  ctx.fillText(text, 8, origin);
+  let data: Uint8ClampedArray;
+  try {
+    data = ctx.getImageData(0, 0, width, height).data;
+  } catch {
+    return null;
+  }
+  let minY = -1;
+  let maxY = -1;
+  for (let y = 0; y < height; y++) {
+    const row = y * width * 4;
+    for (let x = 0; x < width; x++) {
+      if (data[row + x * 4 + 3] > 16) {
+        if (minY < 0) minY = y;
+        maxY = y;
+        break;
+      }
+    }
+  }
+  if (minY < 0 || maxY < minY) return null;
+  return { ascent: origin - minY, descent: Math.max(0, maxY - origin) };
 }
 
 function finiteBox(value: number | undefined): number {

@@ -80,47 +80,68 @@ function hour12From24(hour24: number, minute: string): { hour: string; minute: s
 }
 
 /**
- * iOS WKWebView drops the hour and minute from hour12 formatToParts (the colon stays).
- * A 24-hour reading still includes them, and format() does too when the parts do not.
+ * iOS WKWebView drops the hour and minute from en-US formatToParts, and en-US with
+ * hourCycle h23 can come back blank too. en-GB h23 is the reading that still prints
+ * on that WebView (the UTC line already uses it). Try that before en-US.
  */
-function clockFrom24Hour(date: Date, timeZone: string): { hour: string; minute: string; dayPeriod: string } | null {
-  let hour: string | null = null;
-  let minute: string | null = null;
+const CLOCK_LOCALES = ['en-GB', 'en-US'] as const;
+
+function read24Hour(date: Date, timeZone: string, locale: string): { hour: string; minute: string } | null {
+  const options: Intl.DateTimeFormatOptions = {
+    timeZone,
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  };
   try {
-    const bag = bagOf(
-      new Intl.DateTimeFormat('en-US', {
-        timeZone,
-        hour: '2-digit',
-        minute: '2-digit',
-        hourCycle: 'h23',
-      }).formatToParts(date),
-    );
-    hour = digits(bag.hour);
-    minute = digits(bag.minute);
+    const bag = bagOf(new Intl.DateTimeFormat(locale, options).formatToParts(date));
+    const hour = digits(bag.hour);
+    const minute = digits(bag.minute);
+    if (hour != null && minute != null) return { hour, minute };
   } catch {
-    hour = null;
+    /* The formatted string is the other way to read the same clock. */
   }
-  if (hour == null || minute == null) {
+  try {
+    const text = new Intl.DateTimeFormat(locale, options).format(date);
+    const match = text.match(/(\d{1,2})\D(\d{2})/);
+    if (match) return { hour: match[1], minute: match[2] };
+  } catch {
+    return null;
+  }
+  return null;
+}
+
+function clockFrom24Hour(date: Date, timeZone: string): { hour: string; minute: string; dayPeriod: string } | null {
+  for (const locale of CLOCK_LOCALES) {
+    const reading = read24Hour(date, timeZone, locale);
+    if (!reading) continue;
+    const hour24 = Number(reading.hour);
+    if (!Number.isFinite(hour24)) continue;
+    return hour12From24(hour24, reading.minute);
+  }
+  return null;
+}
+
+function zoneName(date: Date, timeZone: string): string {
+  for (const locale of CLOCK_LOCALES) {
     try {
-      const text = new Intl.DateTimeFormat('en-US', {
+      const fmt = new Intl.DateTimeFormat(locale, {
         timeZone,
-        hour: '2-digit',
+        hour: 'numeric',
         minute: '2-digit',
+        timeZoneName: 'short',
         hourCycle: 'h23',
-      }).format(date);
-      const match = text.match(/(\d{1,2})\D(\d{2})/);
-      if (match) {
-        hour = match[1];
-        minute = match[2];
-      }
+      });
+      const fromParts = fmt.formatToParts(date).find((part) => part.type === 'timeZoneName')?.value?.trim() ?? '';
+      if (/[A-Za-z]/.test(fromParts)) return fromParts;
+      const text = fmt.format(date);
+      const match = text.match(/[A-Z]{2,5}|GMT[+-]\d{1,2}(?::?\d{2})?/);
+      if (match) return match[0];
     } catch {
-      return null;
+      /* Try the other locale. */
     }
   }
-  if (hour == null || minute == null) return null;
-  const hour24 = Number(hour);
-  if (!Number.isFinite(hour24)) return null;
-  return hour12From24(hour24, minute);
+  return '';
 }
 
 function localParts(date: Date, timeZone: string): Parts {
@@ -152,6 +173,8 @@ function localParts(date: Date, timeZone: string): Parts {
       if (!dayPeriod.trim()) dayPeriod = filled.dayPeriod;
     }
   }
+  let timeZoneName = bag.timeZoneName ?? '';
+  if (!/[A-Za-z]/.test(timeZoneName)) timeZoneName = zoneName(date, timeZone);
   return {
     weekday: bag.weekday ?? '',
     year: bag.year ?? '',
@@ -160,7 +183,7 @@ function localParts(date: Date, timeZone: string): Parts {
     hour,
     minute,
     dayPeriod,
-    timeZoneName: bag.timeZoneName ?? '',
+    timeZoneName,
   };
 }
 

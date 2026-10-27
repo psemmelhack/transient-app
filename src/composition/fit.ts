@@ -84,6 +84,109 @@ export function fitLine(metrics: ProbeMetrics, targetWidth: number, options: Fit
   };
 }
 
+/**
+ * Canvas ink that disagrees with the DOM advance is a bad measurement
+ * (WebKit sometimes reports a box many times the glyphs). Fit from the DOM width then.
+ */
+export function metricsForFit(metrics: ProbeMetrics): ProbeMetrics {
+  const advance = metrics.advanceWidth > 0 ? metrics.advanceWidth : metrics.domAdvanceWidth;
+  const dom = metrics.domAdvanceWidth > 0 ? metrics.domAdvanceWidth : advance;
+  const reference = dom > 1 ? dom : advance;
+  const ink = metrics.actualBoundingBoxLeft + metrics.actualBoundingBoxRight;
+  const ratio = reference > 1 ? ink / reference : 0;
+  const sane =
+    reference > 1 &&
+    ink > 1 &&
+    ratio >= 0.65 &&
+    ratio <= 1.35 &&
+    metrics.actualBoundingBoxLeft > -reference &&
+    metrics.actualBoundingBoxLeft < reference;
+  if (sane) return metrics;
+  return {
+    ...metrics,
+    advanceWidth: reference,
+    domAdvanceWidth: reference,
+    actualBoundingBoxLeft: 0,
+    actualBoundingBoxRight: reference,
+  };
+}
+
+export interface VerticalInk {
+  ascent: number;
+  descent: number;
+}
+
+/**
+ * Prefer the canvas API when it agrees with the painted pixels.
+ * A box that is far shorter than the font, or that disagrees with the pixels, is discarded
+ * so the line can fall back to the em square instead of cropping the glyphs.
+ */
+export function chooseVertical(
+  probe: number,
+  api: VerticalInk & { fontAscent: number },
+  pixels: VerticalInk | null,
+): VerticalInk | null {
+  const size = probe > 0 ? probe : 200;
+  const plausible = (ascent: number, descent: number) =>
+    Number.isFinite(ascent) &&
+    Number.isFinite(descent) &&
+    ascent >= size * 0.55 &&
+    ascent <= size * 1.25 &&
+    descent >= 0 &&
+    descent <= size * 0.5;
+  const apiOk = plausible(api.ascent, api.descent);
+  const pixOk = pixels != null && plausible(pixels.ascent, pixels.descent);
+  if (apiOk && pixOk && Math.abs(api.ascent - pixels.ascent) <= 3 && Math.abs(api.descent - pixels.descent) <= 3) {
+    return { ascent: api.ascent, descent: api.descent };
+  }
+  if (pixOk && pixels) return { ascent: pixels.ascent, descent: pixels.descent };
+  if (apiOk && api.fontAscent > size * 0.45 && api.ascent >= api.fontAscent * 0.68) {
+    return { ascent: api.ascent, descent: api.descent };
+  }
+  return null;
+}
+
+export interface LineBox {
+  height: number;
+  shiftTop: number;
+  /** False when the em square must stay open so a bad metric cannot crop the type. */
+  crop: boolean;
+}
+
+/**
+ * Place the line box on the browser's baseline plus the ink height.
+ * The same numbers the desktop canvas already reports keep today's crop.
+ * Missing ink uses the full em square and does not crop.
+ */
+export function placeLineBox(input: {
+  fontSize: number;
+  probeSize: number;
+  baseline: number | null;
+  ascent: number | null;
+  descent: number | null;
+}): LineBox {
+  const probe = input.probeSize > 0 ? input.probeSize : 200;
+  const k = input.fontSize / probe;
+  const ascent = input.ascent;
+  const descent = input.descent ?? 0;
+  const baseline = input.baseline;
+  if (
+    ascent != null &&
+    baseline != null &&
+    baseline > probe * 0.3 &&
+    baseline < probe * 1.4 &&
+    ascent >= probe * 0.55 &&
+    ascent <= probe * 1.25 &&
+    descent >= 0 &&
+    descent <= probe * 0.5
+  ) {
+    const top = baseline - ascent;
+    const bottom = baseline + descent;
+    return { height: Math.max(1, (bottom - top) * k), shiftTop: -top * k, crop: true };
+  }
+  return { height: Math.max(1, input.fontSize), shiftTop: 0, crop: false };
+}
+
 /** Ink width that `fitLine` will produce, given the same probe metrics. */
 export function fittedInkWidth(metrics: ProbeMetrics, targetWidth: number): number {
   const fitted = fitLine(metrics, targetWidth);
