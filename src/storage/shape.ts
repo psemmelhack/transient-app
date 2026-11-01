@@ -1,4 +1,5 @@
 import type { FormatId } from '../composition/formats';
+import type { PosterPhoto } from '../composition/posterPhoto';
 import type { TelemetrySnapshot } from '../data/telemetry';
 import type { Style } from '../style/types';
 
@@ -35,4 +36,6 @@ export interface TransientRecord {
   png: Blob;
   shares: ShareEntry[];
   locationSource: 'device' | 'example';
+  /** Cover-cropped JPEG kept with the record. The map still shows the PNG. Absent on older records. */
+  photo?: PosterPhoto | null;
 }

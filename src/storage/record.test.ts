@@ -99,5 +99,21 @@ describe('transient record', () => {
     });
     expect(record.telemetry).toBeNull();
     expect(record.lines.map((line) => line.id)).toEqual(['accuracy']);
+    expect(record.photo).toBeNull();
+  });
+
+  it('keeps the poster photo with the record', () => {
+    const style = styleFromPreset(presetById('02'));
+    const photo = { jpeg: 'data:image/jpeg;base64,aaaa', luminance: 0.4 };
+    const record = makeRecord({
+      moment: exampleMoment(EXAMPLE_INSTANT),
+      style,
+      message: '',
+      scene,
+      png: new Blob(['png']),
+      shares: [],
+      photo,
+    });
+    expect(record.photo).toEqual(photo);
   });
 });

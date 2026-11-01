@@ -58,6 +58,23 @@ describe('import', () => {
     expect(saved[0].message).toBe('A note');
     expect(saved[0].png.size).toBeGreaterThan(32);
     expect(saved[0].png.type).toBe('image/png');
+    expect(saved[0].photo).toBeNull();
+  });
+
+  it('keeps a poster photo and drops one that is not a jpeg', async () => {
+    const jpeg = `data:image/jpeg;base64,${'A'.repeat(48)}`;
+    await importTransients({
+      version: 1,
+      transients: [
+        entry({ id: 'with-photo', photo: { jpeg, luminance: 0.25 } }),
+        entry({ id: 'bad-photo', capturedAt: '2026-10-24T03:11:20.000Z', photo: { jpeg: 'data:image/png;base64,xx', luminance: 0.2 } }),
+      ],
+    });
+    const saved = await listTransients();
+    const kept = saved.find((record) => record.id === 'with-photo');
+    const dropped = saved.find((record) => record.id === 'bad-photo');
+    expect(kept?.photo).toEqual({ jpeg, luminance: 0.25 });
+    expect(dropped?.photo).toBeNull();
   });
 
   it('merges a record with no id by time and place', async () => {

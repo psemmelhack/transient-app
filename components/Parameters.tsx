@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { contrastRatio, formatContrast } from '../src/color/contrast';
+import type { PosterPhoto } from '../src/composition/posterPhoto';
 import { isHex, normalizeHex } from '../src/color/oklch';
 import { FORMAT_ORDER, FORMATS, formatChoiceEnabled } from '../src/composition/formats';
 import { CATEGORIES, fontCss, fontsIn, getFont, monoFonts, resolveFont } from '../src/composition/fonts';
@@ -30,7 +31,21 @@ const SWATCHES = ['#111111', '#FFFFFF', '#D2231C', '#4B1C40', '#1E3A2D', '#CBA65
 
 const MOTION_NOTE = 'Motion access is off. Location extras still show.';
 
-export function Parameters({ style, onChange }: { style: Style; onChange: (next: Style) => void }) {
+export function Parameters({
+  style,
+  onChange,
+  photo = null,
+  onPickPhoto,
+  onClearPhoto,
+  photoNote = null,
+}: {
+  style: Style;
+  onChange: (next: Style) => void;
+  photo?: PosterPhoto | null;
+  onPickPhoto?: () => void;
+  onClearPhoto?: () => void;
+  photoNote?: string | null;
+}) {
   const shell = useNativeShell();
   const [motionNote, setMotionNote] = useState<string | null>(null);
 
@@ -204,6 +219,23 @@ export function Parameters({ style, onChange }: { style: Style; onChange: (next:
         </div>
         <Swatches value={style.backgroundColor} onPick={(hex) => onChange(withBackground(style, hex))} />
         <HexField label="Background color hex" value={style.backgroundColor} onCommit={(hex) => onChange(withBackground(style, hex))} />
+        <div style={{ ...minorLabel, marginTop: 16 }}>Photo</div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <button type="button" aria-label={photo ? 'Replace photo' : 'Add photo'} onClick={onPickPhoto} style={iconChoice(Boolean(photo))}>
+            <Icon name="camera" size={22} color={ink} />
+          </button>
+          {photo ? (
+            <>
+              <img src={photo.jpeg} alt="" style={{ width: 36, height: 36, objectFit: 'cover', flex: 'none' }} />
+              <button type="button" aria-label="Remove photo" onClick={onClearPhoto} style={iconChoice(false)}>
+                <Icon name="close" size={18} color={ink} />
+              </button>
+            </>
+          ) : null}
+        </div>
+        {photoNote ? (
+          <p style={{ fontFamily: ui, fontWeight: 400, fontSize: 12, lineHeight: 1.45, color: muted, margin: '8px 0 0' }}>{photoNote}</p>
+        ) : null}
       </Section>
 
       <Section label="Data">

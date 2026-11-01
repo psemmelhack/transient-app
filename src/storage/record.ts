@@ -1,3 +1,4 @@
+import type { PosterPhoto } from '../composition/posterPhoto';
 import type { Scene } from '../composition/scene';
 import { isExtendedEnabled, isTelemetryEnabled, measurementLines } from '../data/plugins';
 import type { Moment } from '../data/moment';
@@ -20,6 +21,7 @@ export function makeRecord(input: {
   scene: Scene;
   png: Blob;
   shares: ShareEntry[];
+  photo?: PosterPhoto | null;
 }): TransientRecord {
   const sun = sunPosition(input.moment.at, input.moment.latitude, input.moment.longitude);
   const telemetryOn = isTelemetryEnabled(input.style.measurements);
@@ -53,5 +55,6 @@ export function makeRecord(input: {
     png: input.png,
     shares: input.shares,
     locationSource: input.moment.source,
+    photo: input.photo ?? null,
   };
 }

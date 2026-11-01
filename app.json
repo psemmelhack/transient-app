@@ -22,6 +22,8 @@
       "supportsTablet": true,
       "infoPlist": {
         "NSLocationWhenInUseUsageDescription": "Transient uses your location to record where you are.",
+        "NSCameraUsageDescription": "Transient uses the camera for the card background.",
+        "NSPhotoLibraryUsageDescription": "Transient uses a photo from your library as the card background.",
         "NSPhotoLibraryAddUsageDescription": "Transient saves the image to your photos.",
         "NSMotionUsageDescription": "Transient reads motion, heading, and today’s steps when Telemetry is on."
       }
@@ -66,7 +68,15 @@
         }
       ],
       "expo-sharing",
-      "expo-sqlite"
+      "expo-sqlite",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Transient uses a photo from your library as the card background.",
+          "cameraPermission": "Transient uses the camera for the card background.",
+          "microphonePermission": false
+        }
+      ]
     ],
     "extra": {
       "eas": {

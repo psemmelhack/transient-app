@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
+import { useEffect, useMemo, useRef, useState, type ChangeEvent, type CSSProperties } from 'react';
 import { noteTripleTap } from '../src/ui/press';
 import { shellIconButton, shellIconRow } from '../src/ui/shellChrome';
 import { toggleDiagnostic } from '../src/composition/fitReport';
 import { flushSync } from 'react-dom';
+import { jpegBase64ToBlob, preparePosterPhoto, type PosterPhoto } from '../src/composition/posterPhoto';
 import { buildScene } from '../src/composition/scene';
 import { captureStage } from '../src/export/capture';
 import { captureFileName, downloadBlob } from '../src/export/download';
@@ -23,7 +24,8 @@ import { Icon } from './Icons';
 import { Parameters } from './Parameters';
 import { useStyle } from './StyleContext';
 import { captureLabel, capturedToast, libraryMissToast, savedToDownloads, sharedWithLabel } from '../src/ui/actions';
-import { SHELL_HEADER_PADDING_RIGHT, useNativeShell } from '../src/native/shell';
+import { requestNativePhoto } from '../src/native/photoBridge';
+import { isNativeShell, SHELL_HEADER_PADDING_RIGHT, useNativeShell } from '../src/native/shell';
 import { ink, line, muted, paper, ui } from './theme';
 
 const NOTE_LIMIT = 200;
@@ -36,6 +38,8 @@ export function MakeScreen({ onMap, fixture = false }: { onMap: () => void; fixt
   const extendedOn = shell && isExtendedEnabled(style.measurements);
   const telemetry = useTelemetry(telemetryOn || extendedOn);
   const [note, setNote] = useState('');
+  const [photo, setPhoto] = useState<PosterPhoto | null>(null);
+  const [photoNote, setPhotoNote] = useState<string | null>(null);
   const [sharedWith, setSharedWith] = useState('');
   const [lock, setLock] = useState<Moment | null>(null);
   const [atControls, setAtControls] = useState(false);
@@ -53,6 +57,7 @@ export function MakeScreen({ onMap, fixture = false }: { onMap: () => void; fixt
   const dockRef = useRef<HTMLDivElement>(null);
   const paramsRef = useRef<HTMLDivElement>(null);
   const stageRef = useRef<HTMLElement | null>(null);
+  const photoRef = useRef<HTMLInputElement>(null);
   const taps = useRef<number[]>([]);
 
   function onPosterTap() {
@@ -67,7 +72,7 @@ export function MakeScreen({ onMap, fixture = false }: { onMap: () => void; fixt
     const live = telemetryOn || extendedOn;
     return applyTelemetry(base, live ? telemetry.sensors : null, live ? telemetry.location : null);
   }, [extendedOn, lock, moment, telemetry.sensors, telemetry.location, telemetryOn]);
-  const scene = useMemo(() => buildScene(style, shown, note, shown?.at ?? now), [style, shown, note, now]);
+  const scene = useMemo(() => buildScene(style, shown, note, shown?.at ?? now, photo), [style, shown, note, now, photo]);
   const box = previewBox({
     sceneWidth: scene.width,
     sceneHeight: scene.height,
@@ -143,6 +148,48 @@ export function MakeScreen({ onMap, fixture = false }: { onMap: () => void; fixt
     scroller.scrollTo({ top: Math.max(0, params.offsetTop - pin.offsetHeight + 4), behavior: 'smooth' });
   }
 
+  function onPickPhoto() {
+    setPhotoNote(null);
+    // The capture attribute opens the camera and hides the library on Android Chrome.
+    // Without it, the same sheet offers Take Photo and Photo Library. Expo Go loads this
+    // page from a file URL, where that sheet never reaches the camera, so the shell asks natively.
+    if (isNativeShell()) {
+      void pickFromShell();
+      return;
+    }
+    photoRef.current?.click();
+  }
+
+  async function pickFromShell() {
+    const result = await requestNativePhoto();
+    if (result.status === 'cancelled') return;
+    if (result.status === 'denied') {
+      setPhotoNote('Camera or photo library access is off.');
+      return;
+    }
+    if (result.status !== 'ready') {
+      setPhotoNote('Could not read that photo.');
+      return;
+    }
+    try {
+      setPhoto(await preparePosterPhoto(jpegBase64ToBlob(result.base64)));
+    } catch {
+      setPhotoNote('Could not read that photo.');
+    }
+  }
+
+  async function onPhotoFile(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+    try {
+      setPhoto(await preparePosterPhoto(file));
+      setPhotoNote(null);
+    } catch {
+      setPhotoNote('Could not read that photo.');
+    }
+  }
+
   function onDie() {
     setRoll((value) => value + 1);
     setDimmed(true);
@@ -154,7 +201,7 @@ export function MakeScreen({ onMap, fixture = false }: { onMap: () => void; fixt
     flushSync(() => setLock(frozen));
     const stage = stageRef.current;
     if (!stage) throw new Error('The composition is not ready');
-    const sceneNow = buildScene(style, frozen, note, frozen.at);
+    const sceneNow = buildScene(style, frozen, note, frozen.at, photo);
     const raw = await captureStage(stage, sceneNow);
     let png = raw;
     try {
@@ -218,6 +265,7 @@ export function MakeScreen({ onMap, fixture = false }: { onMap: () => void; fixt
             scene: rendered.scene,
             png: rendered.png,
             shares: sharesForCapture(delivered === 'saved' ? '' : sharedWith),
+            photo,
           }),
         );
       } catch {
@@ -327,7 +375,25 @@ export function MakeScreen({ onMap, fixture = false }: { onMap: () => void; fixt
         <div style={{ height: box.gap, transition: 'height 320ms ease' }} />
 
         <div ref={paramsRef} style={{ scrollMarginTop: box.pinHeight, width: '100%', minWidth: 0, boxSizing: 'border-box' }}>
-          <Parameters style={style} onChange={update} />
+          <input
+            ref={photoRef}
+            type="file"
+            accept="image/*"
+            aria-label="Choose a photo"
+            onChange={onPhotoFile}
+            style={{ position: 'fixed', left: -1000, top: 0, width: 1, height: 1, opacity: 0 }}
+          />
+          <Parameters
+            style={style}
+            onChange={update}
+            photo={photo}
+            onPickPhoto={onPickPhoto}
+            onClearPhoto={() => {
+              setPhoto(null);
+              setPhotoNote(null);
+            }}
+            photoNote={photoNote}
+          />
           <div style={{ height: 'max(64px, env(safe-area-inset-bottom))' }} />
         </div>
       </div>

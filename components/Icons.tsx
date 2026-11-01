@@ -14,7 +14,8 @@ export type IconName =
   | 'quiet'
   | 'story'
   | 'feed'
-  | 'square';
+  | 'square'
+  | 'camera';
 
 export function Icon({
   name,
@@ -99,6 +100,12 @@ export function Icon({
       {name === 'story' && <Rect x="8" y="3.5" width="8" height="17" rx="1.4" {...stroke} />}
       {name === 'feed' && <Rect x="6.5" y="4" width="11" height="16" rx="1.4" {...stroke} />}
       {name === 'square' && <Rect x="5" y="5" width="14" height="14" rx="1.4" {...stroke} />}
+      {name === 'camera' && (
+        <>
+          <Path d="M8.1 7.4 9.3 5.7h5.4l1.2 1.7H19a1 1 0 0 1 1 1V18a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V8.4a1 1 0 0 1 1-1h3.1z" {...stroke} />
+          <Circle cx="12" cy="13.1" r="3.1" {...stroke} />
+        </>
+      )}
     </Svg>
   );
 }
