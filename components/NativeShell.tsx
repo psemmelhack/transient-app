@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type ComponentType, type Ref } from 'react';
 import { ActivityIndicator, Pressable, Text, View } from 'react-native';
+import { NATIVE_FONT_EVENT } from '../src/native/fontBridge';
+import { fontFileAllowed } from '../src/native/fontFile';
 import { NATIVE_PHOTO_EVENT, photoChunks } from '../src/native/photoBridge';
 import { pickPosterPhoto } from '../src/native/pickPhoto';
 import WebViewModule, { type WebViewMessageEvent } from 'react-native-webview';
@@ -357,6 +359,10 @@ export function NativeShell() {
       await deliverPhoto(message.id);
       return;
     }
+    if (message.type === 'read-font') {
+      await deliverFont(message.id, message.path);
+      return;
+    }
     if (message.type === 'capture-begin') {
       const pending = startCapture(message.id, message.filename, message.count);
       if (!pending) {
@@ -384,6 +390,38 @@ export function NativeShell() {
       finishCapture(message.id, 'shared');
     } catch {
       finishCapture(message.id, 'failed');
+    }
+  }
+
+  async function deliverFont(id: string, path: string) {
+    const finish = (status: 'ready' | 'failed', count?: number) => {
+      push(
+        `window.dispatchEvent(new CustomEvent(${JSON.stringify(NATIVE_FONT_EVENT)}, { detail: ${JSON.stringify({ id, status, count })} }));`,
+      );
+    };
+    try {
+      const shown = targetRef.current;
+      const root = shown?.kind === 'pack' ? shown.readAccessUrl : '';
+      const uri = fontFileAllowed(path, root);
+      if (!uri) {
+        finish('failed');
+        return;
+      }
+      const base64 = await LegacyFileSystem.readAsStringAsync(uri, { encoding: 'base64' });
+      if (!base64) {
+        finish('failed');
+        return;
+      }
+      const parts = photoChunks(base64);
+      push(`window.__transientFont = ${JSON.stringify({ id, parts: [] as string[] })};`);
+      parts.forEach((part, index) => {
+        push(
+          `if (window.__transientFont && window.__transientFont.id === ${JSON.stringify(id)}) window.__transientFont.parts[${index}] = ${JSON.stringify(part)};`,
+        );
+      });
+      finish('ready', parts.length);
+    } catch {
+      finish('failed');
     }
   }
 
