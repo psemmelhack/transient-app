@@ -31,7 +31,8 @@ export type WebToNative =
   | { source: typeof WEB_SOURCE; type: 'capture'; id: string; filename: string; pngBase64: string }
   | { source: typeof WEB_SOURCE; type: 'capture-begin'; id: string; filename: string; count: number }
   | { source: typeof WEB_SOURCE; type: 'capture-chunk'; id: string; index: number; data: string }
-  | { source: typeof WEB_SOURCE; type: 'capture-end'; id: string };
+  | { source: typeof WEB_SOURCE; type: 'capture-end'; id: string }
+  | { source: typeof WEB_SOURCE; type: 'pick-photo'; id: string };
 
 /** Outbound command. A separate union so each member keeps its own fields. */
 export type WebCommand =
@@ -41,7 +42,8 @@ export type WebCommand =
   | { type: 'capture'; id: string; filename: string; pngBase64: string }
   | { type: 'capture-begin'; id: string; filename: string; count: number }
   | { type: 'capture-chunk'; id: string; index: number; data: string }
-  | { type: 'capture-end'; id: string };
+  | { type: 'capture-end'; id: string }
+  | { type: 'pick-photo'; id: string };
 
 /** Pieces of one PNG, posted separately so a large message is not dropped. */
 export interface PendingCapture {
@@ -137,6 +139,9 @@ export function parseWebMessage(raw: unknown): WebToNative | null {
   }
   if (message.type === 'capture-end' && typeof message.id === 'string') {
     return { source: WEB_SOURCE, type: 'capture-end', id: message.id };
+  }
+  if (message.type === 'pick-photo' && typeof message.id === 'string' && message.id.length > 0 && message.id.length < 80) {
+    return { source: WEB_SOURCE, type: 'pick-photo', id: message.id };
   }
   return null;
 }

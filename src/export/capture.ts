@@ -41,9 +41,22 @@ function sceneFontShorthands(scene: Scene): string[] {
   return specs;
 }
 
+async function waitForPosterPhoto(stage: HTMLElement): Promise<void> {
+  const img = stage.querySelector('[data-role="poster-photo"]');
+  if (!(img instanceof HTMLImageElement)) return;
+  if (img.complete && img.naturalWidth > 0) return;
+  await new Promise<void>((resolve) => {
+    const done = () => resolve();
+    img.addEventListener('load', done, { once: true });
+    img.addEventListener('error', done, { once: true });
+    window.setTimeout(done, 4000);
+  });
+}
+
 export async function captureStage(stage: HTMLElement, scene: Scene): Promise<Blob> {
   await ensureFonts(sceneFontShorthands(scene));
   await Promise.race([fitsSettled(), new Promise((resolve) => setTimeout(resolve, 1500))]);
+  await waitForPosterPhoto(stage);
   clampHeroElement(stage);
   await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve(null))));
   clampHeroElement(stage);

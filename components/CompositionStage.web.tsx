@@ -85,6 +85,22 @@ export const CompositionStage = forwardRef<HTMLDivElement, Props>(function Compo
           fontKerning: 'normal',
         }}
       >
+        {scene.photo ? (
+          <>
+            <img
+              data-role="poster-photo"
+              src={scene.photo.href}
+              alt=""
+              draggable={false}
+              decoding="sync"
+              style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', pointerEvents: 'none' }}
+            />
+            <div
+              data-role="poster-scrim"
+              style={{ position: 'absolute', inset: 0, backgroundImage: scene.photo.scrim, pointerEvents: 'none' }}
+            />
+          </>
+        ) : null}
         {scene.nodes.map((node, index) => (
           <NodeView key={nodeKey(node, index)} node={node} />
         ))}

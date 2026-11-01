@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type ComponentType, type Ref } from 'react';
 import { ActivityIndicator, Pressable, Text, View } from 'react-native';
+import { NATIVE_PHOTO_EVENT, photoChunks } from '../src/native/photoBridge';
+import { pickPosterPhoto } from '../src/native/pickPhoto';
 import WebViewModule, { type WebViewMessageEvent } from 'react-native-webview';
 import * as LegacyFileSystem from 'expo-file-system/legacy';
 import * as Location from 'expo-location';
@@ -351,6 +353,10 @@ export function NativeShell() {
       setTelemetryOn(message.enabled);
       return;
     }
+    if (message.type === 'pick-photo') {
+      await deliverPhoto(message.id);
+      return;
+    }
     if (message.type === 'capture-begin') {
       const pending = startCapture(message.id, message.filename, message.count);
       if (!pending) {
@@ -378,6 +384,35 @@ export function NativeShell() {
       finishCapture(message.id, 'shared');
     } catch {
       finishCapture(message.id, 'failed');
+    }
+  }
+
+  async function deliverPhoto(id: string) {
+    const finish = (status: 'ready' | 'cancelled' | 'denied' | 'failed', count?: number) => {
+      push(
+        `window.dispatchEvent(new CustomEvent(${JSON.stringify(NATIVE_PHOTO_EVENT)}, { detail: ${JSON.stringify({ id, status, count })} }));`,
+      );
+    };
+    try {
+      const picked = await pickPosterPhoto();
+      if (picked.status !== 'ready') {
+        finish(picked.status);
+        return;
+      }
+      const parts = photoChunks(picked.base64);
+      if (!parts.length) {
+        finish('failed');
+        return;
+      }
+      push(`window.__transientPhoto = ${JSON.stringify({ id, parts: [] })};`);
+      parts.forEach((part, index) => {
+        push(
+          `if (window.__transientPhoto && window.__transientPhoto.id === ${JSON.stringify(id)}) window.__transientPhoto.parts[${index}] = ${JSON.stringify(part)};`,
+        );
+      });
+      finish('ready', parts.length);
+    } catch {
+      finish('failed');
     }
   }
 

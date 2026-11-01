@@ -2,6 +2,7 @@ import { measurementLines, isExtendedEnabled } from '../data/plugins';
 import { deviceTimeZone, type Moment } from '../data/moment';
 import { linesForCard, omitSupersededAccuracy, type TelemetryLine } from '../data/telemetry';
 import { layoutSpreadTelemetry, POSTER_HERO_BAND, TELEMETRY_COLUMN_CAP, TELEMETRY_FONT_FLOOR } from './telemetryFit';
+import { legibilityFor, type PosterPhoto } from './posterPhoto';
 import type { Style } from '../style/types';
 import { FORMATS } from './formats';
 import { getFont, resolveFont, type CssFont, type FontRole } from './fonts';
@@ -16,6 +17,8 @@ export interface Scene {
   height: number;
   background: string;
   nodes: SceneNode[];
+  /** Cover-cropped photo and the veil behind the type. Absent when the card is flat color. */
+  photo?: { href: string; scrim: string } | null;
 }
 
 export type SceneNode =
@@ -266,35 +269,55 @@ function telemetryBlock(
 /** Gap the footer renders above the telemetry block. */
 const TELEMETRY_GAP = 12;
 
-export function buildScene(style: Style, moment: Moment | null, message: string, now = new Date()): Scene {
-  const format = FORMATS[style.format];
+export function buildScene(
+  style: Style,
+  moment: Moment | null,
+  message: string,
+  now = new Date(),
+  photo: PosterPhoto | null = null,
+): Scene {
+  const look = photo ? legibilityFor(style.textColor, style.footerColor, photo.luminance) : null;
+  const painted = look ? paintForPhoto(style, look) : style;
+  const format = FORMATS[painted.format];
+  const layer = photo && look ? { href: photo.jpeg, scrim: look.scrim } : null;
   if (!moment) {
     return {
       width: format.width,
       height: format.height,
-      background: style.backgroundColor,
+      background: painted.backgroundColor,
+      photo: layer,
       nodes: [
         {
           kind: 'placeholder',
           text: 'Finding this place',
           sub: clockLabel(now, deviceTimeZone()),
-          font: fontOf(style, 'mono'),
-          subFont: fontOf(style, 'mono'),
-          color: style.textColor,
+          font: fontOf(painted, 'mono'),
+          subFont: fontOf(painted, 'mono'),
+          color: painted.textColor,
         },
       ],
     };
   }
-  const recipe = getRecipe(style.recipeId);
+  const recipe = getRecipe(painted.recipeId);
   const nodes =
     recipe.kind === 'poster'
-      ? posterNodes(recipe, style, moment, message)
-      : quietNodes(recipe, style, moment, message);
+      ? posterNodes(recipe, painted, moment, message)
+      : quietNodes(recipe, painted, moment, message);
   return {
     width: format.width,
     height: format.height,
-    background: style.backgroundColor,
+    background: painted.backgroundColor,
+    photo: layer,
     nodes,
+  };
+}
+
+/** Keep each style's colors when they still read. Otherwise fall back to paper or ink. Fonts stay. */
+function paintForPhoto(style: Style, look: { textColor: string; footerColor: string }): Style {
+  return {
+    ...style,
+    textColor: look.textColor,
+    footerColor: style.footerColor == null ? null : look.footerColor,
   };
 }
 

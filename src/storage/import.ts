@@ -1,3 +1,4 @@
+import { storedPhoto } from '../composition/posterPhoto';
 import { sanitizeStyle, hasSavedStyle, saveStyle, STYLE_KEY } from '../style/persist';
 import { importedLabel } from '../ui/actions';
 import { deleteTransient, listTransients, saveTransient, TRANSIENT_DB, TRANSIENT_STORE, type ShareEntry, type TransientRecord } from './library';
@@ -159,6 +160,7 @@ async function normalizeRecord(raw: unknown): Promise<{ record: TransientRecord;
       png: await pngBlob(item.png),
       shares: sharesOf(item.shares),
       locationSource: item.locationSource === 'example' ? 'example' : 'device',
+      photo: storedPhoto(item.photo),
     },
   };
 }
