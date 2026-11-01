@@ -108,6 +108,10 @@ export function Parameters({
         </HScroll>
       </Section>
 
+      <Section label="Photo">
+        <PhotoControl photo={photo} onPickPhoto={onPickPhoto} onClearPhoto={onClearPhoto} photoNote={photoNote} />
+      </Section>
+
       <Section label="Layout">
         <div style={{ display: 'flex', gap: 8 }}>
           <IconChoice icon="poster" label="Poster" pressed={style.layout === 'poster'} onPress={() => onChange(withLayout(style, 'poster'))} />
@@ -219,23 +223,6 @@ export function Parameters({
         </div>
         <Swatches value={style.backgroundColor} onPick={(hex) => onChange(withBackground(style, hex))} />
         <HexField label="Background color hex" value={style.backgroundColor} onCommit={(hex) => onChange(withBackground(style, hex))} />
-        <div style={{ ...minorLabel, marginTop: 16 }}>Photo</div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <button type="button" aria-label={photo ? 'Replace photo' : 'Add photo'} onClick={onPickPhoto} style={iconChoice(Boolean(photo))}>
-            <Icon name="camera" size={22} color={ink} />
-          </button>
-          {photo ? (
-            <>
-              <img src={photo.jpeg} alt="" style={{ width: 36, height: 36, objectFit: 'cover', flex: 'none' }} />
-              <button type="button" aria-label="Remove photo" onClick={onClearPhoto} style={iconChoice(false)}>
-                <Icon name="close" size={18} color={ink} />
-              </button>
-            </>
-          ) : null}
-        </div>
-        {photoNote ? (
-          <p style={{ fontFamily: ui, fontWeight: 400, fontSize: 12, lineHeight: 1.45, color: muted, margin: '8px 0 0' }}>{photoNote}</p>
-        ) : null}
       </Section>
 
       <Section label="Data">
@@ -285,6 +272,39 @@ export function Parameters({
           })}
       </Section>
     </div>
+  );
+}
+
+function PhotoControl({
+  photo,
+  onPickPhoto,
+  onClearPhoto,
+  photoNote,
+}: {
+  photo: PosterPhoto | null;
+  onPickPhoto?: () => void;
+  onClearPhoto?: () => void;
+  photoNote?: string | null;
+}) {
+  return (
+    <>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <button type="button" aria-label={photo ? 'Replace photo' : 'Add photo'} onClick={onPickPhoto} style={iconChoice(Boolean(photo))}>
+          <Icon name="camera" size={22} color={ink} />
+        </button>
+        {photo ? (
+          <>
+            <img src={photo.jpeg} alt="" style={{ width: 36, height: 36, objectFit: 'cover', flex: 'none' }} />
+            <button type="button" aria-label="Remove photo" onClick={onClearPhoto} style={iconChoice(false)}>
+              <Icon name="close" size={18} color={ink} />
+            </button>
+          </>
+        ) : null}
+      </div>
+      {photoNote ? (
+        <p style={{ fontFamily: ui, fontWeight: 400, fontSize: 12, lineHeight: 1.45, color: muted, margin: '8px 0 0' }}>{photoNote}</p>
+      ) : null}
+    </>
   );
 }
 

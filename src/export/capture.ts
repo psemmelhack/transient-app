@@ -1,9 +1,11 @@
 import { domToBlob } from 'modern-screenshot';
 import type { CssFont } from '../composition/fonts';
-import { cssFontShorthand, ensureFonts } from '../composition/fontReady';
+import { cssFontShorthand, ensureFonts, familyFromShorthand } from '../composition/fontReady';
 import { clampHeroElement } from '../composition/heroClearance';
 import type { Scene } from '../composition/scene';
 import { fitsSettled } from '../composition/fitSession';
+import { embedSceneFonts } from './fontEmbed';
+import { refitExportSvg } from './refit';
 
 function addSpec(specs: string[], font: Pick<CssFont, 'family' | 'weight' | 'style'> | undefined, size: number) {
   if (font) specs.push(cssFontShorthand(font, size));
@@ -54,12 +56,15 @@ async function waitForPosterPhoto(stage: HTMLElement): Promise<void> {
 }
 
 export async function captureStage(stage: HTMLElement, scene: Scene): Promise<Blob> {
-  await ensureFonts(sceneFontShorthands(scene));
+  const specs = sceneFontShorthands(scene);
+  await ensureFonts(specs);
   await Promise.race([fitsSettled(), new Promise((resolve) => setTimeout(resolve, 1500))]);
   await waitForPosterPhoto(stage);
   clampHeroElement(stage);
   await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve(null))));
   clampHeroElement(stage);
+  const families = [...new Set(specs.map(familyFromShorthand).filter((family) => family.length > 0))];
+  const cssText = await embedSceneFonts(families);
   const blob = await domToBlob(stage, {
     width: scene.width,
     height: scene.height,
@@ -71,6 +76,8 @@ export async function captureStage(stage: HTMLElement, scene: Scene): Promise<Bl
       left: '0',
       top: '0',
     },
+    font: cssText ? { cssText } : undefined,
+    onCreateForeignObjectSvg: (svg) => refitExportSvg(svg),
   });
   if (!blob) throw new Error('Could not render the image');
   return blob;
