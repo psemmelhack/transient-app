@@ -1,2 +1,2 @@
 // Rewritten by scripts/embed-web.mjs. Do not edit.
-export const PACK_REVISION = "a72a9dbb7ad3";
+export const PACK_REVISION = "c953c782b289";

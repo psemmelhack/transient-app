@@ -92,7 +92,7 @@ export interface QuietNode {
   top: number;
   bottom: number;
   align: Align;
-  anchor: 'center' | 'end';
+  anchor: 'center' | 'end' | 'start';
   color: string;
   blocks: QuietBlock[];
 }
@@ -492,8 +492,8 @@ function quietNodes(recipe: QuietRecipe, style: Style, moment: Moment, message: 
   const format = FORMATS[style.format];
   const native = !recipe.safe && style.format === recipe.nativeFormat;
   const side = native ? recipe.side : Math.max(recipe.side, format.inset.left);
-  const anchor: 'center' | 'end' =
-    recipe.anchor === 'align' ? (style.align === 'center' ? 'center' : 'end') : recipe.anchor;
+  const anchor: QuietNode['anchor'] =
+    recipe.anchor === 'start' ? 'start' : recipe.anchor === 'align' ? (style.align === 'center' ? 'center' : 'end') : recipe.anchor;
   let top = native ? recipe.top : Math.max(recipe.top, anchor === 'center' ? 0 : format.inset.top);
   let bottom = native ? recipe.bottom : Math.max(recipe.bottom, format.inset.bottom);
   const contentWidth = format.width - side * 2;
@@ -505,6 +505,12 @@ function quietNodes(recipe: QuietRecipe, style: Style, moment: Moment, message: 
   const readings = measured(style, moment);
   const telemetry = telemetryFor(style, moment);
   const extended = isExtendedEnabled(style.measurements);
+  if (recipe.leadNote) {
+    const reserve = readings.length || telemetry.length ? 200 : 0;
+    const leadRoom = Math.max(280, format.height - top - bottom - reserve);
+    const lead = fitLeadNote(blocks, leadRoom, contentWidth);
+    blocks.splice(0, blocks.length, ...lead);
+  }
   if (readings.length || telemetry.length) {
     const rowBlock = recipe.measurementRows ? blocks.find((block) => block.kind === 'rows') : undefined;
     const foldIntoRows = Boolean(rowBlock && rowBlock.kind === 'rows' && !extended);
@@ -564,7 +570,8 @@ function quietNodes(recipe: QuietRecipe, style: Style, moment: Moment, message: 
     bottom -= bottomGain;
     available = format.height - top - bottom;
   }
-  const fitted = fitQuietBlocks(blocks, available);
+  const lead = recipe.leadNote ? fitLeadNote(blocks, available, contentWidth) : blocks;
+  const fitted = !recipe.leadNote || quietStackHeight(lead) > available ? fitQuietBlocks(lead, available) : lead;
   const nodes: SceneNode[] = [
     {
       kind: 'quiet',
@@ -592,6 +599,20 @@ function quietBlock(spec: QuietBlockSpec, style: Style, moment: Moment, message:
   if (spec.kind === 'text') {
     const raw = renderToken(spec.token, moment, message);
     if (!raw) return null;
+    if (spec.token === 'message' && spec.lead) {
+      const text = raw.trim();
+      if (!text) return null;
+      return {
+        kind: 'text',
+        text,
+        font: fontOf(style, 'display'),
+        fontSize: spec.size,
+        lineHeight: spec.lineHeight,
+        marginTop: spec.marginTop,
+        maxWidth: contentWidth,
+        wrap: true,
+      };
+    }
     if (spec.token === 'message') {
       const text = raw.trim();
       const font = noteFace(style.displayFontId, style.monoFontId, spec.font);
@@ -787,6 +808,98 @@ export function footerBlockHeight(node: FooterNode): number {
     : 0;
   const mark = node.mark ? node.mark.marginTop + node.mark.fontSize * 1.4 : 0;
   return body + extra + telemetry + mark;
+}
+
+function textBlock(block: QuietBlock): block is Extract<QuietBlock, { kind: 'text' }> {
+  return block.kind === 'text';
+}
+
+function applyLeadSize(note: Extract<QuietBlock, { kind: 'text' }>, fontSize: number, contentWidth: number) {
+  note.fontSize = fontSize;
+  note.maxWidth = contentWidth;
+  note.lineHeight = fontSize >= 84 ? 0.98 : fontSize >= 56 ? 1.05 : 1.16;
+}
+
+/**
+ * The note stays the largest line. Date, time, latitude, and longitude follow it.
+ * With no note, the date takes that top place. The stack is kept inside the card.
+ */
+function fitLeadNote(blocks: QuietBlock[], available: number, contentWidth: number): QuietBlock[] {
+  const next = structuredClone(blocks) as QuietBlock[];
+  const note = next.find((block) => textBlock(block) && block.wrap);
+  const facts = next.filter((block) => textBlock(block) && !block.wrap);
+  if (note && textBlock(note)) {
+    const preferred = [40, 36, 32, 32];
+    facts.forEach((fact, index) => {
+      if (!textBlock(fact)) return;
+      fact.fontSize = preferred[index] ?? 28;
+      fact.lineHeight = 1.15;
+      fact.maxWidth = contentWidth;
+    });
+    const dateSize = textBlock(facts[0]) ? facts[0].fontSize : 32;
+    let best = dateSize + 8;
+    let low = best;
+    let high = Math.max(note.fontSize, 120, best);
+    while (low <= high) {
+      const mid = Math.floor((low + high) / 2);
+      applyLeadSize(note, mid, contentWidth);
+      if (quietStackHeight(next) <= available) {
+        best = mid;
+        low = mid + 1;
+      } else {
+        high = mid - 1;
+      }
+    }
+    applyLeadSize(note, best, contentWidth);
+    let guard = 0;
+    while (quietStackHeight(next) > available && guard < 48) {
+      guard += 1;
+      const date = facts[0];
+      const dateFloor = textBlock(date) ? date.fontSize : 22;
+      if (textBlock(date) && date.fontSize > 22) {
+        for (const fact of facts) {
+          if (textBlock(fact)) fact.fontSize = Math.max(20, fact.fontSize - 1);
+        }
+        continue;
+      }
+      if (note.fontSize > dateFloor + 4) {
+        applyLeadSize(note, note.fontSize - 2, contentWidth);
+        continue;
+      }
+      let opened = false;
+      for (const block of next) {
+        if ((block.kind === 'text' || block.kind === 'meta' || block.kind === 'telemetry') && block.marginTop > 4) {
+          block.marginTop = Math.max(4, block.marginTop - 4);
+          opened = true;
+        }
+      }
+      if (!opened) break;
+    }
+    const date = facts[0];
+    if (textBlock(date) && note.fontSize <= date.fontSize) applyLeadSize(note, date.fontSize + 4, contentWidth);
+    return next;
+  }
+  const preferred = [96, 56, 44, 44];
+  facts.forEach((fact, index) => {
+    if (!textBlock(fact)) return;
+    fact.fontSize = preferred[index] ?? 36;
+    fact.lineHeight = index === 0 ? 1.02 : 1.12;
+    fact.maxWidth = contentWidth;
+    if (index === 0) fact.marginTop = 0;
+  });
+  let guard = 0;
+  while (quietStackHeight(next) > available && guard < 40) {
+    guard += 1;
+    const date = facts[0];
+    if (!textBlock(date) || date.fontSize <= 40) break;
+    facts.forEach((fact, index) => {
+      if (!textBlock(fact)) return;
+      fact.fontSize = Math.max(index === 0 ? 40 : 22, fact.fontSize - 2);
+    });
+    const time = facts[1];
+    if (textBlock(date) && textBlock(time) && date.fontSize <= time.fontSize) date.fontSize = time.fontSize + 8;
+  }
+  return next;
 }
 
 function fitQuietBlocks(blocks: QuietBlock[], available: number): QuietBlock[] {

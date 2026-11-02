@@ -1,6 +1,7 @@
 import { complementaryBackground, MIN_AUTO_CONTRAST } from '../color/complement';
 import { contrastRatio } from '../color/contrast';
 import { displayFonts, monoFonts } from '../composition/fonts';
+import { recipeForLayout } from './edit';
 import type { Style } from './types';
 
 /** Colors dark or light enough that a partner can clear the contrast bar. */
@@ -25,7 +26,7 @@ const TEXT_COLORS = [
   '#F6F1E6',
 ].filter((hex) => contrastRatio(hex, '#FFFFFF') >= MIN_AUTO_CONTRAST || contrastRatio(hex, '#000000') >= MIN_AUTO_CONTRAST);
 
-const LAYOUTS: Style['layout'][] = ['poster', 'quiet'];
+const LAYOUTS: Style['layout'][] = ['poster', 'quiet', 'note'];
 const ALIGNS: Style['align'][] = ['left', 'center', 'right'];
 
 function pick<T>(items: readonly T[], rng: () => number): T {
@@ -50,7 +51,7 @@ export function randomStyle(current: Style, rng: () => number = Math.random): St
   return {
     ...current,
     presetId: null,
-    recipeId: layout === 'poster' ? 'poster-generic' : 'quiet-generic',
+    recipeId: recipeForLayout(layout),
     layout,
     align,
     textColor,
