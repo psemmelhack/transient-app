@@ -12,6 +12,9 @@ describe('style edits', () => {
     expect(next.recipeId).toBe('quiet-generic');
     expect(next.presetId).toBeNull();
     expect(next.footerColor).toBeNull();
+    const note = withLayout(defaultStyle(), 'note');
+    expect(note.layout).toBe('note');
+    expect(note.recipeId).toBe('note-generic');
   });
 
   it('keeps the background when Auto is off', () => {

@@ -116,6 +116,7 @@ export function Parameters({
         <div style={{ display: 'flex', gap: 8 }}>
           <IconChoice icon="poster" label="Poster" pressed={style.layout === 'poster'} onPress={() => onChange(withLayout(style, 'poster'))} />
           <IconChoice icon="quiet" label="Quiet" pressed={style.layout === 'quiet'} onPress={() => onChange(withLayout(style, 'quiet'))} />
+          <IconChoice icon="note" label="Note" pressed={style.layout === 'note'} onPress={() => onChange(withLayout(style, 'note'))} />
         </div>
       </Section>
 

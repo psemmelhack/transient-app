@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { exampleMoment, EXAMPLE_INSTANT } from '../data/moment';
 import type { SensorSample } from '../data/telemetry';
 import { contrastRatio } from '../color/contrast';
-import { PRESETS, presetById, styleFromPreset } from '../style/presets';
+import { withLayout } from '../style/edit';
+import { PRESETS, defaultStyle, presetById, styleFromPreset } from '../style/presets';
 import { noteColumns, noteFontSize, noteRhythm, wrapNote, wrappedLineCount } from './note';
 import { randomStyle } from '../style/randomize';
 import { buildScene, footerBlockHeight, quietStackHeight, type FitStackNode, type FooterNode, type QuietBlock, type QuietNode } from './scene';
@@ -311,6 +312,103 @@ function expectBalancedNote(text: string, fontSize: number, maxWidth: number, rh
   const minimum = Math.ceil(noteColumns(fontSize, maxWidth, rhythm) * 0.4);
   expect(last.length, `${label} “${last}”`).toBeGreaterThanOrEqual(minimum);
 }
+
+describe('note layout', () => {
+  function card(message: string, momentOverride: typeof moment = moment, measurements?: Record<string, boolean>) {
+    const style = withLayout(defaultStyle(), 'note');
+    if (measurements) style.measurements = { ...style.measurements, ...measurements };
+    const scene = buildScene(style, momentOverride, message, EXAMPLE_INSTANT);
+    const quiet = scene.nodes.find((node) => node.kind === 'quiet');
+    if (!quiet || quiet.kind !== 'quiet') throw new Error('missing note stack');
+    return { scene, quiet, style };
+  }
+
+  function lines(quiet: QuietNode) {
+    return quiet.blocks.filter((block) => block.kind === 'text');
+  }
+
+  function fits(scene: ReturnType<typeof buildScene>, quiet: QuietNode) {
+    expect(quiet.anchor).toBe('start');
+    expect(quietStackHeight(quiet.blocks)).toBeLessThanOrEqual(scene.height - quiet.top - quiet.bottom + 0.5);
+    const width = scene.width - quiet.left - quiet.right;
+    for (const block of quiet.blocks) {
+      if (block.kind === 'text' && block.maxWidth) expect(block.maxWidth).toBeLessThanOrEqual(width + 0.5);
+    }
+  }
+
+  it('puts a short note above date, time, latitude, and longitude', () => {
+    const message = 'Here.';
+    const { scene, quiet } = card(message);
+    const text = lines(quiet);
+    expect(text.map((block) => (block.kind === 'text' ? block.text : ''))).toEqual([
+      message,
+      expect.stringMatching(/, \d{4}$/),
+      expect.stringMatching(/\d+:\d+\s+(AM|PM)/),
+      moment.latitude.toFixed(6),
+      moment.longitude.toFixed(6),
+    ]);
+    expect(text[0].kind === 'text' && text[1].kind === 'text' && text[0].fontSize).toBeGreaterThan(text[1].fontSize);
+    expect(text[0].kind === 'text' && text[0].font.family).toBe('Anton');
+    fits(scene, quiet);
+  });
+
+  it('keeps a long note the largest line and inside the card', () => {
+    const { scene, quiet } = card(NOTE_200);
+    const { scene: shortScene, quiet: shortQuiet } = card('Here.');
+    const text = lines(quiet);
+    const short = lines(shortQuiet);
+    expect(text[0].kind === 'text' && text[0].text).toBe(NOTE_200);
+    expect(text[0].kind === 'text' && text[1].kind === 'text' && text[0].fontSize).toBeGreaterThan(text[1].fontSize);
+    expect(text[0].kind === 'text' && short[0].kind === 'text' && text[0].fontSize).toBeLessThan(short[0].fontSize);
+    expect(text.map((block) => (block.kind === 'text' ? block.wrap === true : false))).toEqual([true, false, false, false, false]);
+    fits(scene, quiet);
+    fits(shortScene, shortQuiet);
+  });
+
+  it('leads with the date when the note is empty', () => {
+    const { scene, quiet } = card('   ');
+    const text = lines(quiet);
+    expect(text.some((block) => block.kind === 'text' && block.wrap)).toBe(false);
+    expect(text[0].kind === 'text' && text[0].text).toMatch(/, \d{4}$/);
+    expect(text[1].kind === 'text' && text[1].text).toMatch(/\d+:\d+\s+(AM|PM)/);
+    expect(text[2].kind === 'text' && text[2].text).toBe(moment.latitude.toFixed(6));
+    expect(text[3].kind === 'text' && text[3].text).toBe(moment.longitude.toFixed(6));
+    expect(text[0].kind === 'text' && text[1].kind === 'text' && text[0].fontSize).toBeGreaterThan(text[1].fontSize);
+    fits(scene, quiet);
+  });
+
+  it('keeps a photo, extended readings, and speed only above 1 mph', () => {
+    const style = withLayout(defaultStyle(), 'note');
+    const photo = { jpeg: 'data:image/jpeg;base64,/9j/4AAQ', luminance: 0.2 };
+    const over = buildScene(style, moment, 'Here.', EXAMPLE_INSTANT, photo);
+    expect(over.photo?.href).toBe(photo.jpeg);
+    const phone = {
+      ...sensors,
+      phone: {
+        pressureHpa: 1009.4,
+        relativeAltitudeM: 0.2,
+        magneticField: { x: -31.5, y: -50.4, z: -3.2 },
+        trueHeading: 101,
+        magneticHeading: 90,
+        stepsToday: 734,
+        gravity: { x: 0.21, y: -8.9, z: -4.12 },
+        batteryState: 'unplugged',
+        brightness: 0.93,
+        networkType: 'wifi',
+        deviceModel: 'iPhone',
+        illuminance: null,
+      },
+    };
+    const moving = card('Here.', { ...moment, speed: 1.4, sensors: phone }, { telemetry: true, extended: true });
+    const movingLines = moving.quiet.blocks.find((block) => block.kind === 'telemetry');
+    expect(movingLines && movingLines.kind === 'telemetry' && movingLines.lines.map((line) => line.label)).toContain('SPD');
+    expect(movingLines && movingLines.kind === 'telemetry' && movingLines.lines.map((line) => line.label)).toContain('BARO');
+    fits(moving.scene, moving.quiet);
+    const still = card('Here.', { ...moment, speed: 0.2, sensors }, { telemetry: true });
+    const stillLines = still.quiet.blocks.find((block) => block.kind === 'telemetry');
+    expect(stillLines && stillLines.kind === 'telemetry' && stillLines.lines.map((line) => line.label)).not.toContain('SPD');
+  });
+});
 
 describe('note measure', () => {
   it('uses a 200-character sentence', () => {

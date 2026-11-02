@@ -12,10 +12,16 @@ export function withPreset(style: Style, preset: Preset): Style {
   return styleFromPreset(preset, style);
 }
 
+export function recipeForLayout(layout: LayoutMode): string {
+  if (layout === 'poster') return 'poster-generic';
+  if (layout === 'quiet') return 'quiet-generic';
+  return 'note-generic';
+}
+
 export function withLayout(style: Style, layout: LayoutMode): Style {
   return leavePreset(style, {
     layout,
-    recipeId: layout === 'poster' ? 'poster-generic' : 'quiet-generic',
+    recipeId: recipeForLayout(layout),
     footerColor: null,
   });
 }

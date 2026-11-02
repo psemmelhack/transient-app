@@ -557,20 +557,14 @@ function Quiet({ node }: { node: QuietNode }) {
           fitSpreadTelemetry(spread, stage);
         }
         if (cancelled || !ref.current || !innerRef.current) return;
+        innerRef.current.querySelectorAll<HTMLElement>('[data-fit-size]').forEach(fitDeclaredLine);
+        const lead = innerRef.current.querySelector<HTMLElement>('[data-note-size]');
+        if (lead) fitLeadNoteBlock(lead);
         const available = ref.current.clientHeight;
         const natural = innerRef.current.offsetHeight;
+        const edge = node.align === 'right' ? 'right' : node.align === 'center' ? 'center' : 'left';
         const origin =
-          node.anchor === 'end'
-            ? node.align === 'right'
-              ? 'bottom right'
-              : node.align === 'center'
-                ? 'bottom center'
-                : 'bottom left'
-            : node.align === 'right'
-              ? 'center right'
-              : node.align === 'center'
-                ? 'center center'
-                : 'center left';
+          node.anchor === 'end' ? `bottom ${edge}` : node.anchor === 'start' ? `top ${edge}` : `center ${edge}`;
         const scale = available > 0 && natural > available ? available / natural : 1;
         setFit((prev) => (prev.scale === scale && prev.origin === origin ? prev : { scale, origin }));
       } finally {
@@ -594,7 +588,7 @@ function Quiet({ node }: { node: QuietNode }) {
         bottom: node.bottom,
         display: 'flex',
         flexDirection: 'column',
-        justifyContent: node.anchor === 'center' ? 'center' : 'flex-end',
+        justifyContent: node.anchor === 'center' ? 'center' : node.anchor === 'start' ? 'flex-start' : 'flex-end',
         alignItems: node.align === 'center' ? 'center' : node.align === 'right' ? 'flex-end' : 'flex-start',
         textAlign: node.align,
         color: node.color,
@@ -796,6 +790,7 @@ function QuietPiece({ block, align }: { block: QuietBlock; align: Align }) {
       <div
         data-role="note"
         data-note-copy
+        data-note-size={block.fontSize}
         style={{
           ...fontCss(block.font),
           fontSize: block.fontSize,
@@ -999,6 +994,50 @@ function TelemetryRow({ line }: { line: { label: string; values: string[] } }) {
   );
 }
 
+/** Reset to the declared size, then shrink one nowrap line until it stays inside its box. */
+function fitDeclaredLine(el: HTMLElement) {
+  const declared = Number.parseFloat(el.dataset.fitSize ?? '');
+  if (!(declared > 0)) return;
+  let size = declared;
+  el.style.fontSize = `${size}px`;
+  const limit = el.clientWidth;
+  let guard = 0;
+  while (limit > 0 && el.scrollWidth > limit + 1 && size > 16 && guard < 14) {
+    const next = size * (limit / el.scrollWidth);
+    if (!(next < size - 0.25)) break;
+    size = Math.max(16, next);
+    el.style.fontSize = `${size}px`;
+    guard += 1;
+  }
+}
+
+/**
+ * The lead note is one size across every wrapped line. Shrink that size together
+ * when a real glyph is wider than the character estimate, so the lines stay even.
+ */
+function fitLeadNoteBlock(note: HTMLElement) {
+  const declared = Number.parseFloat(note.dataset.noteSize ?? '');
+  if (!(declared > 0)) return;
+  let size = declared;
+  note.style.fontSize = `${size}px`;
+  const limit = note.clientWidth;
+  const widest = () => {
+    let max = 0;
+    for (const child of note.children) {
+      if (child instanceof HTMLElement) max = Math.max(max, child.scrollWidth);
+    }
+    return max;
+  };
+  let guard = 0;
+  while (limit > 0 && widest() > limit + 1 && size > 16 && guard < 16) {
+    const next = size * (limit / Math.max(widest(), 1));
+    if (!(next < size - 0.25)) break;
+    size = Math.max(16, next);
+    note.style.fontSize = `${size}px`;
+    guard += 1;
+  }
+}
+
 function ShrinkText({
   font,
   fontSize,
@@ -1035,6 +1074,7 @@ function ShrinkText({
   return (
     <div
       ref={ref}
+      data-fit-size={fontSize}
       style={{
         ...fontCss(font),
         fontSize,

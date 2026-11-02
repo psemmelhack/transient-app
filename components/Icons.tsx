@@ -12,6 +12,7 @@ export type IconName =
   | 'align-right'
   | 'poster'
   | 'quiet'
+  | 'note'
   | 'story'
   | 'feed'
   | 'square'
@@ -95,6 +96,13 @@ export function Icon({
           <Line x1="8" y1="8" x2="16" y2="8" {...stroke} />
           <Line x1="6" y1="12" x2="18" y2="12" {...stroke} />
           <Line x1="9" y1="16" x2="15" y2="16" {...stroke} />
+        </>
+      )}
+      {name === 'note' && (
+        <>
+          <Line x1="5" y1="7" x2="19" y2="7" stroke={color} strokeWidth={1.75} strokeLinecap="round" />
+          <Line x1="5" y1="12" x2="16" y2="12" {...stroke} />
+          <Line x1="5" y1="16.5" x2="13" y2="16.5" {...stroke} />
         </>
       )}
       {name === 'story' && <Rect x="8" y="3.5" width="8" height="17" rx="1.4" {...stroke} />}

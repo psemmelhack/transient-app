@@ -73,6 +73,8 @@ export type QuietBlockSpec =
       marginTop: number;
       opacity?: number;
       maxWidth?: number;
+      /** Wrap the note in the display face and keep it the largest line on the card. */
+      lead?: boolean;
     }
   | {
       kind: 'coords';
@@ -144,8 +146,10 @@ export interface QuietRecipe {
   side: number;
   top: number;
   bottom: number;
-  anchor: 'center' | 'end' | 'align';
+  anchor: 'center' | 'end' | 'align' | 'start';
   blocks: QuietBlockSpec[];
+  /** The note is the lead line. It stays larger than the date, time, and coordinates under it. */
+  leadNote?: boolean;
   absoluteMark?: { size: number; opacity: number; tracking?: number; bottom: number };
   /** Optional data lines, set in the same small type as the rest of the recipe. */
   measurementMeta?: {
@@ -478,6 +482,68 @@ export const RECIPES: Record<string, Recipe> = {
       },
     ],
     absoluteMark: { size: 13, opacity: 0.45, tracking: 0.14, bottom: 40 },
+  },
+  'note-generic': {
+    kind: 'quiet',
+    id: 'note-generic',
+    safe: true,
+    nativeFormat: 'feed',
+    side: 64,
+    top: 56,
+    bottom: 72,
+    anchor: 'start',
+    leadNote: true,
+    blocks: [
+      {
+        kind: 'text',
+        token: 'message',
+        font: 'display',
+        size: 120,
+        lineHeight: 1.02,
+        marginTop: 0,
+        lead: true,
+      },
+      {
+        kind: 'text',
+        token: 'date-long',
+        font: 'display',
+        size: 40,
+        lineHeight: 1.15,
+        marginTop: 36,
+      },
+      {
+        kind: 'text',
+        token: 'time-short',
+        font: 'display',
+        size: 36,
+        lineHeight: 1.15,
+        marginTop: 8,
+      },
+      {
+        kind: 'text',
+        token: 'lat',
+        font: 'display',
+        size: 32,
+        lineHeight: 1.1,
+        marginTop: 28,
+      },
+      {
+        kind: 'text',
+        token: 'lon',
+        font: 'display',
+        size: 32,
+        lineHeight: 1.1,
+        marginTop: 4,
+      },
+    ],
+    absoluteMark: { size: 13, opacity: 0.45, tracking: 0.14, bottom: 36 },
+    measurementMeta: {
+      font: 'mono',
+      size: 16,
+      lineHeight: 1.55,
+      marginTop: 28,
+      opacity: 0.82,
+    },
   },
   'quiet-ledger': {
     kind: 'quiet',
