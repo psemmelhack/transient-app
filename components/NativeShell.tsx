@@ -15,16 +15,21 @@ import * as Updates from 'expo-updates';
 import { factsFromUpdates, type BuildFacts } from '../src/native/buildStamp';
 import {
   joinedCapture,
+  joinedPosterPhoto,
   NATIVE_BUILD_EVENT,
   parseWebMessage,
   pushCaptureChunk,
+  pushPosterPhotoChunk,
   startCapture,
+  startPosterPhoto,
   type CaptureHandoff,
   type PendingCapture,
+  type PendingPosterPhoto,
   type ShellLocation,
   type ShellLocationDetail,
   type ShellPlace,
 } from '../src/native/protocol';
+import { clearPosterPhoto, savePosterPhoto } from '../src/storage/posterPhotoStore';
 import {
   PACK_READY_MS,
   SITE,
@@ -144,6 +149,7 @@ export function NativeShell() {
   const placeCache = useRef<{ key: string; place: ShellPlace | null } | null>(null);
   const watch = useRef<Location.LocationSubscription | null>(null);
   const captures = useRef(new Map<string, PendingCapture>());
+  const posterPhotos = useRef(new Map<string, PendingPosterPhoto>());
   const buildRef = useRef<BuildFacts | null>(null);
   const generation = useRef(0);
   const viewToken = useRef(0);
@@ -361,6 +367,29 @@ export function NativeShell() {
     }
     if (message.type === 'read-font') {
       await deliverFont(message.id, message.path);
+      return;
+    }
+    if (message.type === 'poster-photo-clear') {
+      posterPhotos.current.clear();
+      await clearPosterPhoto();
+      return;
+    }
+    if (message.type === 'poster-photo-begin') {
+      const pending = startPosterPhoto(message.id, message.count, message.luminance);
+      if (pending) posterPhotos.current.set(message.id, pending);
+      return;
+    }
+    if (message.type === 'poster-photo-chunk') {
+      const pending = posterPhotos.current.get(message.id);
+      if (!pending) return;
+      posterPhotos.current.set(message.id, pushPosterPhotoChunk(pending, message.index, message.data));
+      return;
+    }
+    if (message.type === 'poster-photo-end') {
+      const pending = posterPhotos.current.get(message.id);
+      posterPhotos.current.delete(message.id);
+      const photo = pending ? joinedPosterPhoto(pending) : null;
+      if (photo) await savePosterPhoto(photo);
       return;
     }
     if (message.type === 'capture-begin') {

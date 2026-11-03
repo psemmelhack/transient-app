@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { joinedCapture, parseWebMessage, pushCaptureChunk, startCapture } from './protocol';
+import { joinedCapture, joinedPosterPhoto, parseWebMessage, pushCaptureChunk, pushPosterPhotoChunk, startCapture, startPosterPhoto } from './protocol';
 
 describe('native shell messages', () => {
   it('reads the messages the page posts', () => {
@@ -29,6 +29,23 @@ describe('native shell messages', () => {
     expect(parseWebMessage({ source: 'transient-web', type: 'capture', id: 1 })).toBeNull();
     expect(parseWebMessage({ source: 'transient-web', type: 'capture-begin', id: 'a', filename: 'a.png', count: 0 })).toBeNull();
     expect(parseWebMessage({ source: 'transient-web', type: 'capture-chunk', id: 'a', index: 1.5, data: 'aa' })).toBeNull();
+  });
+
+  it('forgets a poster photo and reassembles one that arrived in pieces', () => {
+    expect(parseWebMessage({ source: 'transient-web', type: 'poster-photo-clear' })).toEqual({
+      source: 'transient-web',
+      type: 'poster-photo-clear',
+    });
+    expect(parseWebMessage({ source: 'transient-web', type: 'poster-photo-begin', id: '', count: 1, luminance: 0.2 })).toBeNull();
+    const started = startPosterPhoto('photo-1', 2, 0.4);
+    expect(started).not.toBeNull();
+    const withFirst = pushPosterPhotoChunk(started!, 0, 'data:image/jpeg;base64,aaa');
+    const done = pushPosterPhotoChunk(withFirst, 1, 'bbb');
+    expect(joinedPosterPhoto(done)).toEqual({ jpeg: 'data:image/jpeg;base64,aaabbb', luminance: 0.4 });
+    expect(parseWebMessage({ source: 'transient-web', type: 'poster-photo-end', id: 'photo-1' })).toMatchObject({
+      type: 'poster-photo-end',
+      id: 'photo-1',
+    });
   });
 
   it('reassembles a PNG that arrived in pieces', () => {

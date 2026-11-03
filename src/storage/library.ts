@@ -6,6 +6,9 @@ import type { TransientRecord } from './shape';
 /** IndexedDB database and object store. The migrate page reads these names. */
 export const TRANSIENT_DB = 'transient';
 export const TRANSIENT_STORE = 'transients';
+/** Small values that are not a captured transient. The working poster photo lives here. */
+export const KV_STORE = 'kv';
+export const TRANSIENT_DB_VERSION = 2;
 
 const memory: TransientRecord[] = [];
 
@@ -15,12 +18,19 @@ function hasIdb(): boolean {
 
 let dbPromise: Promise<IDBPDatabase> | null = null;
 
+export function transientDatabase(): Promise<IDBPDatabase> {
+  return db();
+}
+
 function db(): Promise<IDBPDatabase> {
   if (!dbPromise) {
-    dbPromise = openDB(TRANSIENT_DB, 1, {
+    dbPromise = openDB(TRANSIENT_DB, TRANSIENT_DB_VERSION, {
       upgrade(database) {
-        const store = database.createObjectStore(TRANSIENT_STORE, { keyPath: 'id' });
-        store.createIndex('by-time', 'capturedAt');
+        if (!database.objectStoreNames.contains(TRANSIENT_STORE)) {
+          const store = database.createObjectStore(TRANSIENT_STORE, { keyPath: 'id' });
+          store.createIndex('by-time', 'capturedAt');
+        }
+        if (!database.objectStoreNames.contains(KV_STORE)) database.createObjectStore(KV_STORE);
       },
     });
   }

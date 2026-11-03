@@ -5,6 +5,8 @@ export type { ShareEntry, TransientRecord } from './shape';
 
 export const TRANSIENT_DB = 'transient';
 export const TRANSIENT_STORE = 'transients';
+export const KV_STORE = 'kv';
+export const TRANSIENT_DB_VERSION = 2;
 
 export async function listTransients(): Promise<TransientRecord[]> {
   const rows = nativeDb().getAllSync<{ json: string; png: Uint8Array | ArrayBuffer | number[] }>('SELECT json, png FROM transients ORDER BY capturedAt DESC');
