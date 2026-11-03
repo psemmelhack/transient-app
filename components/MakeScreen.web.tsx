@@ -19,6 +19,8 @@ import { sunPosition } from '../src/data/solar';
 import type { Scene } from '../src/composition/scene';
 import { makeRecord, sharesForCapture } from '../src/storage/record';
 import { saveTransient } from '../src/storage/library';
+import { clearPosterPhoto, loadPosterPhoto, savePosterPhoto } from '../src/storage/posterPhotoStore';
+import { syncPosterPhoto } from '../src/native/posterPhotoSync';
 import { CompositionStage } from './CompositionStage';
 import { Icon } from './Icons';
 import { Parameters } from './Parameters';
@@ -58,7 +60,37 @@ export function MakeScreen({ onMap, fixture = false }: { onMap: () => void; fixt
   const paramsRef = useRef<HTMLDivElement>(null);
   const stageRef = useRef<HTMLElement | null>(null);
   const photoRef = useRef<HTMLInputElement>(null);
+  const photoGeneration = useRef(0);
+  const photoWrites = useRef(Promise.resolve());
   const taps = useRef<number[]>([]);
+
+  useEffect(() => {
+    const generation = photoGeneration.current;
+    let cancelled = false;
+    loadPosterPhoto().then((stored) => {
+      if (cancelled || photoGeneration.current !== generation || !stored) return;
+      setPhoto(stored);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  function applyPhoto(next: PosterPhoto | null) {
+    photoGeneration.current += 1;
+    setPhoto(next);
+    setPhotoNote(null);
+    if (!next && photoRef.current) photoRef.current.value = '';
+    photoWrites.current = photoWrites.current.then(async () => {
+      try {
+        if (next) await savePosterPhoto(next);
+        else await clearPosterPhoto();
+      } catch {
+        /* A full disk should not leave the card showing a photo the user just cleared. */
+      }
+      syncPosterPhoto(next);
+    });
+  }
 
   function onPosterTap() {
     const next = noteTripleTap(taps.current, Date.now());
@@ -157,6 +189,7 @@ export function MakeScreen({ onMap, fixture = false }: { onMap: () => void; fixt
       void pickFromShell();
       return;
     }
+    if (photoRef.current) photoRef.current.value = '';
     photoRef.current?.click();
   }
 
@@ -172,7 +205,7 @@ export function MakeScreen({ onMap, fixture = false }: { onMap: () => void; fixt
       return;
     }
     try {
-      setPhoto(await preparePosterPhoto(jpegBase64ToBlob(result.base64)));
+      applyPhoto(await preparePosterPhoto(jpegBase64ToBlob(result.base64)));
     } catch {
       setPhotoNote('Could not read that photo.');
     }
@@ -183,8 +216,7 @@ export function MakeScreen({ onMap, fixture = false }: { onMap: () => void; fixt
     event.target.value = '';
     if (!file) return;
     try {
-      setPhoto(await preparePosterPhoto(file));
-      setPhotoNote(null);
+      applyPhoto(await preparePosterPhoto(file));
     } catch {
       setPhotoNote('Could not read that photo.');
     }
@@ -388,10 +420,7 @@ export function MakeScreen({ onMap, fixture = false }: { onMap: () => void; fixt
             onChange={update}
             photo={photo}
             onPickPhoto={onPickPhoto}
-            onClearPhoto={() => {
-              setPhoto(null);
-              setPhotoNote(null);
-            }}
+            onClearPhoto={() => applyPhoto(null)}
             photoNote={photoNote}
           />
           <div style={{ height: 'max(64px, env(safe-area-inset-bottom))' }} />

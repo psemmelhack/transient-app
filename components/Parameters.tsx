@@ -108,7 +108,7 @@ export function Parameters({
         </HScroll>
       </Section>
 
-      <Section label="Photo">
+      <Section label="Camera">
         <PhotoControl photo={photo} onPickPhoto={onPickPhoto} onClearPhoto={onClearPhoto} photoNote={photoNote} />
       </Section>
 
@@ -296,8 +296,9 @@ function PhotoControl({
         {photo ? (
           <>
             <img src={photo.jpeg} alt="" style={{ width: 36, height: 36, objectFit: 'cover', flex: 'none' }} />
-            <button type="button" aria-label="Remove photo" onClick={onClearPhoto} style={iconChoice(false)}>
-              <Icon name="close" size={18} color={ink} />
+            <button type="button" aria-label="Clear" onClick={onClearPhoto} style={clearControl}>
+              <Icon name="close" size={16} color={ink} />
+              <span>Clear</span>
             </button>
           </>
         ) : null}
@@ -518,6 +519,24 @@ const textChoice: CSSProperties = {
   boxSizing: 'border-box',
   whiteSpace: 'normal',
   textAlign: 'left',
+};
+
+const clearControl: CSSProperties = {
+  minHeight: 44,
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: 6,
+  padding: '0 14px 0 10px',
+  border: 'none',
+  borderRadius: 999,
+  background: 'transparent',
+  boxShadow: `inset 0 0 0 1px ${line}`,
+  cursor: 'pointer',
+  fontFamily: ui,
+  fontWeight: 500,
+  fontSize: 14,
+  letterSpacing: '0.04em',
+  color: ink,
 };
 
 function iconChoice(pressed: boolean): CSSProperties {
