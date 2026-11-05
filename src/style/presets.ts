@@ -1,4 +1,5 @@
 import { resolvedFormat } from '../composition/formats';
+import { DEFAULT_MADE_SEED } from '../composition/madeSeed';
 import { defaultMeasurements } from '../data/plugins';
 import type { Style } from './types';
 
@@ -167,6 +168,9 @@ export function styleFromPreset(preset: Preset, previous?: Style): Style {
     footerColor: preset.footerColor,
     displayFontId: preset.displayFontId,
     monoFontId: preset.monoFontId,
+    madeCell: previous?.madeCell ?? null,
+    madeVariant: previous?.madeVariant ?? 0,
+    madeSeed: previous?.madeSeed ?? DEFAULT_MADE_SEED,
     measurements: previous?.measurements ?? defaultMeasurements(),
     temperatureUnit: previous?.temperatureUnit ?? 'F',
   };

@@ -1,5 +1,6 @@
 import { isHex, normalizeHex } from '../color/oklch';
 import { getFont } from '../composition/fonts';
+import { isMadeCell, seedForCell } from '../composition/madeSeed';
 import { FORMATS, resolvedFormat, type FormatId } from '../composition/formats';
 import { RECIPES } from '../composition/recipes';
 import { defaultMeasurements } from '../data/plugins';
@@ -29,6 +30,11 @@ function isMode(value: unknown): value is BackgroundMode {
   return value === 'auto' || value === 'manual';
 }
 
+function madeVariantOf(value: unknown): number {
+  if (typeof value !== 'number' || !Number.isInteger(value) || value < 0 || value > 1_000_000) return 0;
+  return value;
+}
+
 export function sanitizeStyle(input: unknown): Style {
   const base = defaultStyle();
   if (!input || typeof input !== 'object') return base;
@@ -53,6 +59,12 @@ export function sanitizeStyle(input: unknown): Style {
       typeof raw.footerColor === 'string' && isHex(raw.footerColor) ? normalizeHex(raw.footerColor) : null,
     displayFontId: display.id,
     monoFontId: mono.category === 'mono' ? mono.id : base.monoFontId,
+    madeCell: isMadeCell(raw.madeCell) ? raw.madeCell : null,
+    madeVariant: madeVariantOf(raw.madeVariant),
+    madeSeed:
+      typeof raw.madeSeed === 'number' && Number.isFinite(raw.madeSeed)
+        ? raw.madeSeed >>> 0
+        : seedForCell(isMadeCell(raw.madeCell) ? raw.madeCell : null, madeVariantOf(raw.madeVariant)),
     measurements,
     temperatureUnit: isUnit(raw.temperatureUnit) ? raw.temperatureUnit : 'F',
   };

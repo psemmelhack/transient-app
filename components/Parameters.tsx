@@ -4,6 +4,7 @@ import type { PosterPhoto } from '../src/composition/posterPhoto';
 import { isHex, normalizeHex } from '../src/color/oklch';
 import { FORMAT_ORDER, FORMATS, formatChoiceEnabled } from '../src/composition/formats';
 import { CATEGORIES, fontCss, fontsIn, getFont, monoFonts, resolveFont } from '../src/composition/fonts';
+import { installMadeFont, madeFamily } from '../src/composition/madeFont';
 import { dataTogglePlugins, isMeasurementEnabled } from '../src/data/plugins';
 import { useNativeShell } from '../src/native/shell';
 import { requestMotionAccess } from '../src/data/telemetry';
@@ -12,6 +13,7 @@ import {
   withAlign,
   withAutoBackground,
   withBackground,
+  remixMade,
   withDisplayFont,
   withFormat,
   withLayout,
@@ -38,6 +40,8 @@ export function Parameters({
   onPickPhoto,
   onClearPhoto,
   photoNote = null,
+  placeLatitude = null,
+  placeLongitude = null,
 }: {
   style: Style;
   onChange: (next: Style) => void;
@@ -45,9 +49,15 @@ export function Parameters({
   onPickPhoto?: () => void;
   onClearPhoto?: () => void;
   photoNote?: string | null;
+  placeLatitude?: number | null;
+  placeLongitude?: number | null;
 }) {
   const shell = useNativeShell();
   const [motionNote, setMotionNote] = useState<string | null>(null);
+
+  useEffect(() => {
+    void installMadeFont(style.madeSeed);
+  }, [style.madeSeed]);
 
   function onMeasurement(id: string, on: boolean) {
     const next = !on;
@@ -152,6 +162,7 @@ export function Parameters({
               {fontsIn(category.id).map((font) => {
                 const selected = style.displayFontId === font.id;
                 const face = fontCss(resolveFont(font.id, style.monoFontId, 'display'));
+                const preview = font.id === 'made' ? { ...face, fontFamily: `'${madeFamily(style.madeSeed)}', serif` } : face;
                 return (
                   <button
                     key={font.id}
@@ -161,13 +172,23 @@ export function Parameters({
                     style={{
                       ...textChoice,
                       boxShadow: selected ? `inset 0 0 0 1px ${ink}` : 'inset 0 0 0 1px transparent',
-                      ...face,
+                      ...preview,
                     }}
                   >
                     {font.name}
                   </button>
                 );
               })}
+              {category.id === 'made' && (
+                <button
+                  type="button"
+                  aria-label="New made font"
+                  onClick={() => onChange(remixMade(style, placeLatitude, placeLongitude))}
+                  style={iconChoice(style.displayFontId === 'made')}
+                >
+                  <Icon name="refresh" size={18} />
+                </button>
+              )}
             </div>
           </div>
         ))}

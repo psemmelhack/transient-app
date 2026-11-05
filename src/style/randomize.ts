@@ -60,5 +60,8 @@ export function randomStyle(current: Style, rng: () => number = Math.random): St
     footerColor: null,
     displayFontId: display.id,
     monoFontId: mono.id,
+    madeCell: current.madeCell,
+    madeVariant: current.madeVariant,
+    madeSeed: current.madeSeed,
   };
 }

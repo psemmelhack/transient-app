@@ -1,6 +1,7 @@
 import { complementaryBackground } from '../color/complement';
 import { isHex, normalizeHex } from '../color/oklch';
 import { formatChoiceEnabled, type FormatId } from '../composition/formats';
+import { madeCell, seedForCell } from '../composition/madeSeed';
 import { styleFromPreset, type Preset } from './presets';
 import type { Align, LayoutMode, Style, TempUnit } from './types';
 
@@ -37,6 +38,30 @@ export function withFormat(style: Style, format: FormatId): Style {
 
 export function withDisplayFont(style: Style, id: string): Style {
   return leavePreset(style, { displayFontId: id });
+}
+
+/** Point the Made face at this fix without leaving the current preset. No fix leaves the face alone. */
+export function withMadePlace(style: Style, latitude: number | null | undefined, longitude: number | null | undefined): Style {
+  const cell = madeCell(latitude, longitude);
+  if (!cell) return style;
+  const madeSeed = seedForCell(cell, style.madeVariant);
+  if (cell === style.madeCell && madeSeed === style.madeSeed) return style;
+  return { ...style, madeCell: cell, madeSeed };
+}
+
+/**
+ * The next variation of the current cell. Same coordinates and the same variant
+ * always rebuild the same face. Without a fix yet, the variant still steps a stable fallback.
+ */
+export function remixMade(style: Style, latitude?: number | null, longitude?: number | null): Style {
+  const madeVariant = (style.madeVariant + 1) >>> 0;
+  const cell = madeCell(latitude, longitude) ?? style.madeCell;
+  return leavePreset(style, {
+    displayFontId: 'made',
+    madeCell: cell,
+    madeVariant,
+    madeSeed: seedForCell(cell, madeVariant),
+  });
 }
 
 export function withMonoFont(style: Style, id: string): Style {

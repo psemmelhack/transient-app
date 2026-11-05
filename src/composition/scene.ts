@@ -6,6 +6,8 @@ import { legibilityFor, type PosterPhoto } from './posterPhoto';
 import type { Style } from '../style/types';
 import { FORMATS } from './formats';
 import { getFont, resolveFont, type CssFont, type FontRole } from './fonts';
+import { madeFamily } from './madeFont';
+import { withMadePlace } from '../style/edit';
 import { layoutPosterNote, noteFace, noteFontSize, noteMaxWidth, noteRhythm, NOTE_LEADING, wrappedLineCount } from './note';
 import { getRecipe, type PosterRecipe, type QuietBlockSpec, type QuietRecipe } from './recipes';
 import { clockLabel, coordLines, linesFor, MARK, momentText, renderToken, type CoordLineModel } from './text';
@@ -234,7 +236,13 @@ export interface PlaceholderNode {
 }
 
 function fontOf(style: Style, role: FontRole): CssFont {
-  return resolveFont(style.displayFontId, style.monoFontId, role);
+  return voiceMade(style, resolveFont(style.displayFontId, style.monoFontId, role));
+}
+
+/** The Made family name carries the seed, so preview and capture install the same file. */
+function voiceMade(style: Style, font: CssFont): CssFont {
+  if (font.family !== 'Made') return font;
+  return { ...font, family: madeFamily(style.madeSeed) };
 }
 
 function extras(style: Style, moment: Moment): string[] {
@@ -270,12 +278,13 @@ function telemetryBlock(
 const TELEMETRY_GAP = 12;
 
 export function buildScene(
-  style: Style,
+  incoming: Style,
   moment: Moment | null,
   message: string,
   now = new Date(),
   photo: PosterPhoto | null = null,
 ): Scene {
+  const style = moment ? withMadePlace(incoming, moment.latitude, moment.longitude) : incoming;
   const look = photo ? legibilityFor(style.textColor, style.footerColor, photo.luminance) : null;
   const painted = look ? paintForPhoto(style, look) : style;
   const format = FORMATS[painted.format];
@@ -411,7 +420,7 @@ function posterNodes(recipe: PosterRecipe, style: Style, moment: Moment, message
     ? renderToken(recipe.footer.splitRight, moment, message) ?? undefined
     : undefined;
   const contentWidth = format.width - box.left - box.right;
-  const noteFont = noteFace(style.displayFontId, style.monoFontId, recipe.footer.messageFont);
+  const noteFont = voiceMade(style, noteFace(style.displayFontId, style.monoFontId, recipe.footer.messageFont));
   const posterNote = messageText
     ? layoutPosterNote({
         text: messageText,
@@ -615,7 +624,7 @@ function quietBlock(spec: QuietBlockSpec, style: Style, moment: Moment, message:
     }
     if (spec.token === 'message') {
       const text = raw.trim();
-      const font = noteFace(style.displayFontId, style.monoFontId, spec.font);
+      const font = voiceMade(style, noteFace(style.displayFontId, style.monoFontId, spec.font));
       const fontSize = noteFontSize(text.length, spec.size);
       return {
         kind: 'text',
@@ -646,7 +655,7 @@ function quietBlock(spec: QuietBlockSpec, style: Style, moment: Moment, message:
     const raw = renderToken('message', moment, message);
     if (!raw?.trim()) return null;
     const text = raw.trim();
-    const font = noteFace(style.displayFontId, style.monoFontId, spec.font);
+    const font = voiceMade(style, noteFace(style.displayFontId, style.monoFontId, spec.font));
     const fontSize = noteFontSize(text.length, spec.ceiling);
     return {
       kind: 'note',

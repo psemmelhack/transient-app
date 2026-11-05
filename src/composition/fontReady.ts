@@ -1,5 +1,6 @@
 import type { CssFont } from './fonts';
 import type { FitFaceStatus } from './fitReport';
+import { installMadeFont, seedFromFamily } from './madeFont';
 
 /** CSS font shorthand `document.fonts.load` and `check` accept. */
 export function cssFontShorthand(font: Pick<CssFont, 'family' | 'weight' | 'style'>, size: number): string {
@@ -85,6 +86,10 @@ export async function ensureFonts(shorthands: string[]): Promise<void> {
   const specs = [...new Set(shorthands.filter((spec) => spec.trim().length > 0))];
   if (specs.length === 0) return;
   const families = [...new Set(specs.map(familyFromShorthand).filter((family) => family.length > 0))];
+  for (const family of families) {
+    const seed = seedFromFamily(family);
+    if (seed != null) await installMadeFont(seed);
+  }
   for (let attempt = 0; attempt < 6; attempt++) {
     await Promise.race([fonts.ready.then(() => undefined, () => undefined), delay(attempt === 0 ? 2500 : 700)]);
     const pending = fontSnapshots(families).filter((face) => face.status !== 'loaded' && face.status !== 'error');

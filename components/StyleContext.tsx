@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { withMadePlace } from '../src/style/edit';
 import { loadStyle, saveStyle } from '../src/style/persist';
 import { randomStyle } from '../src/style/randomize';
 import type { Style } from '../src/style/types';
@@ -7,6 +8,7 @@ interface StyleApi {
   style: Style;
   update: (next: Style) => void;
   randomize: () => void;
+  syncMade: (latitude: number | null | undefined, longitude: number | null | undefined) => void;
   undo: () => void;
   canUndo: boolean;
 }
@@ -44,6 +46,16 @@ export function StyleProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
+  const syncMade = useCallback((latitude: number | null | undefined, longitude: number | null | undefined) => {
+    setStyle((current) => {
+      const next = withMadePlace(current, latitude, longitude);
+      if (next === current) return current;
+      saveStyle(next);
+      return next;
+    });
+    setPrevious((prior) => (prior ? withMadePlace(prior, latitude, longitude) : prior));
+  }, []);
+
   const undo = useCallback(() => {
     setPrevious((prior) => {
       if (!prior) return null;
@@ -54,8 +66,8 @@ export function StyleProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const api = useMemo(
-    () => ({ style, update, randomize, undo, canUndo: previous != null }),
-    [style, update, randomize, undo, previous],
+    () => ({ style, update, randomize, syncMade, undo, canUndo: previous != null }),
+    [style, update, randomize, syncMade, undo, previous],
   );
 
   return <Ctx.Provider value={api}>{children}</Ctx.Provider>;

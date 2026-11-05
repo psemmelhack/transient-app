@@ -15,6 +15,7 @@ import { useMoment } from '../src/location/useMoment';
 import { applyTelemetry, useTelemetry, type TelemetryLive } from '../src/location/useTelemetry';
 import { isExtendedEnabled, isTelemetryEnabled } from '../src/data/plugins';
 import type { Moment } from '../src/data/moment';
+import type { Style } from '../src/style/types';
 import { sunPosition } from '../src/data/solar';
 import type { Scene } from '../src/composition/scene';
 import { makeRecord, sharesForCapture } from '../src/storage/record';
@@ -24,6 +25,7 @@ import { syncPosterPhoto } from '../src/native/posterPhotoSync';
 import { CompositionStage } from './CompositionStage';
 import { Icon } from './Icons';
 import { Parameters } from './Parameters';
+import { withMadePlace } from '../src/style/edit';
 import { useStyle } from './StyleContext';
 import { captureLabel, capturedToast, libraryMissToast, savedToDownloads, sharedWithLabel } from '../src/ui/actions';
 import { requestNativePhoto } from '../src/native/photoBridge';
@@ -34,7 +36,7 @@ const NOTE_LIMIT = 200;
 
 export function MakeScreen({ onMap, fixture = false }: { onMap: () => void; fixture?: boolean }) {
   const shell = useNativeShell();
-  const { style, update, randomize, undo, canUndo } = useStyle();
+  const { style, update, randomize, syncMade, undo, canUndo } = useStyle();
   const { moment, now, retry } = useMoment(fixture);
   const telemetryOn = isTelemetryEnabled(style.measurements);
   const extendedOn = shell && isExtendedEnabled(style.measurements);
@@ -105,6 +107,11 @@ export function MakeScreen({ onMap, fixture = false }: { onMap: () => void; fixt
     return applyTelemetry(base, live ? telemetry.sensors : null, live ? telemetry.location : null);
   }, [extendedOn, lock, moment, telemetry.sensors, telemetry.location, telemetryOn]);
   const scene = useMemo(() => buildScene(style, shown, note, shown?.at ?? now, photo), [style, shown, note, now, photo]);
+
+  useEffect(() => {
+    if (!shown) return;
+    syncMade(shown.latitude, shown.longitude);
+  }, [shown, syncMade]);
   const box = previewBox({
     sceneWidth: scene.width,
     sceneHeight: scene.height,
@@ -229,11 +236,12 @@ export function MakeScreen({ onMap, fixture = false }: { onMap: () => void; fixt
     window.setTimeout(() => setDimmed(false), 60);
   }
 
-  async function renderPng(frozen: Moment): Promise<{ png: Blob; scene: Scene }> {
+  async function renderPng(frozen: Moment): Promise<{ png: Blob; scene: Scene; style: Style }> {
     flushSync(() => setLock(frozen));
     const stage = stageRef.current;
     if (!stage) throw new Error('The composition is not ready');
-    const sceneNow = buildScene(style, frozen, note, frozen.at, photo);
+    const placed = withMadePlace(style, frozen.latitude, frozen.longitude);
+    const sceneNow = buildScene(placed, frozen, note, frozen.at, photo);
     const raw = await captureStage(stage, sceneNow);
     let png = raw;
     try {
@@ -262,7 +270,7 @@ export function MakeScreen({ onMap, fixture = false }: { onMap: () => void; fixt
     } catch {
       png = raw.type === 'image/png' ? raw : new Blob([raw], { type: 'image/png' });
     }
-    return { png, scene: sceneNow };
+    return { png, scene: sceneNow, style: placed };
   }
 
   function presentImage(blob: Blob) {
@@ -292,7 +300,7 @@ export function MakeScreen({ onMap, fixture = false }: { onMap: () => void; fixt
         await saveTransient(
           makeRecord({
             moment: frozen,
-            style,
+            style: rendered.style,
             message: note,
             scene: rendered.scene,
             png: rendered.png,
@@ -422,6 +430,8 @@ export function MakeScreen({ onMap, fixture = false }: { onMap: () => void; fixt
             onPickPhoto={onPickPhoto}
             onClearPhoto={() => applyPhoto(null)}
             photoNote={photoNote}
+            placeLatitude={shown?.latitude}
+            placeLongitude={shown?.longitude}
           />
           <div style={{ height: 'max(64px, env(safe-area-inset-bottom))' }} />
         </div>
