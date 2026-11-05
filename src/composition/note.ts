@@ -9,12 +9,15 @@ const MEASURE = {
   /** Inter is wider than a serif italic, so its measure is a little wider to stay near six lines. */
   sans: { em: 0.5, chars: 36 },
   serif: { em: 0.42, chars: 32 },
+  /** Generated faces run wide and uneven, so the estimate wraps early. */
+  made: { em: 0.92, chars: 20 },
 } as const;
 
 export type NoteRhythm = keyof typeof MEASURE;
 
 export function noteRhythm(family: string): NoteRhythm {
   const name = family.toLowerCase();
+  if (name === 'made' || name.startsWith('made ')) return 'made';
   if (name.includes('mono')) return 'mono';
   if (name.includes('inter') || name.includes('sans')) return 'sans';
   return 'serif';
@@ -29,8 +32,9 @@ export function isMonoFamily(family: string): boolean {
  * their own voice; everything else that cannot set a note uses the mono.
  */
 export function noteFace(displayId: string, monoId: string, role: FontRole): CssFont {
-  if (role === 'mono' || role === 'mono-medium') return resolveFont(displayId, monoId, role);
   const display = getFont(displayId);
+  if (display.category === 'made') return resolveFont(displayId, monoId, 'display');
+  if (role === 'mono' || role === 'mono-medium') return resolveFont(displayId, monoId, role);
   if (display.category === 'sans') return resolveFont(displayId, monoId, 'display');
   const textItalic = display.category === 'silky' || display.category === 'classic' || display.id === 'fraunces';
   if (role === 'display-italic' && display.italic && textItalic) return resolveFont(displayId, monoId, 'display-italic');

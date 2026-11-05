@@ -1,4 +1,4 @@
-export type FontCategory = 'tall' | 'bold' | 'silky' | 'classic' | 'sans' | 'mono';
+export type FontCategory = 'tall' | 'bold' | 'silky' | 'classic' | 'sans' | 'made' | 'mono';
 
 export type FontRole = 'display' | 'display-italic' | 'mono' | 'mono-medium';
 
@@ -32,6 +32,7 @@ export const CATEGORIES: { id: FontCategory; label: string }[] = [
   { id: 'silky', label: 'Silky serif' },
   { id: 'classic', label: 'Classic' },
   { id: 'sans', label: 'Sans' },
+  { id: 'made', label: 'Made' },
   { id: 'mono', label: 'Mono' },
 ];
 
@@ -197,6 +198,15 @@ export const FONTS: FontDef[] = [
     style: 'normal',
     italic: false,
     mediumWeight: 400,
+  },
+  {
+    id: 'made',
+    name: 'Made',
+    family: 'Made',
+    category: 'made',
+    weight: 400,
+    style: 'normal',
+    italic: false,
   },
 ];
 

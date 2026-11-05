@@ -16,7 +16,8 @@ export type IconName =
   | 'story'
   | 'feed'
   | 'square'
-  | 'camera';
+  | 'camera'
+  | 'refresh';
 
 export function Icon({
   name,
@@ -55,6 +56,14 @@ export function Icon({
         </>
       )}
       {name === 'undo' && <Path d="M8 8H4.5V4.5M5 8a7 7 0 1 1-1.2 4" {...stroke} />}
+      {name === 'refresh' && (
+        <>
+          <Path d="M19.5 12a7.5 7.5 0 0 1-12.8 5.3" {...stroke} />
+          <Path d="M4.5 12a7.5 7.5 0 0 1 12.8-5.3" {...stroke} />
+          <Path d="M16.2 3.2v3.6h3.6" {...stroke} />
+          <Path d="M7.8 20.8v-3.6H4.2" {...stroke} />
+        </>
+      )}
       {name === 'close' && (
         <>
           <Path d="M7 7l10 10" {...stroke} />

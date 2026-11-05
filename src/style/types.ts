@@ -18,6 +18,15 @@ export interface Style {
   footerColor: string | null;
   displayFontId: string;
   monoFontId: string;
+  /**
+   * Rounded "lat,lon" cell the Made face was built from, or null before a fix.
+   * Two decimal places, about a kilometer. Saved with the transient.
+   */
+  madeCell: string | null;
+  /** 0 is the cell itself. Each regenerate asks for the next variation of that cell. */
+  madeVariant: number;
+  /** Derived from the cell and the variant. Preview, capture, and the saved record share it. */
+  madeSeed: number;
   measurements: Record<string, boolean>;
   temperatureUnit: TempUnit;
 }

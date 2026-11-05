@@ -1,4 +1,5 @@
 import { familyLoaded, fontSnapshots } from '../composition/fontReady';
+import { madeFaceCss } from '../composition/madeFont';
 import { fontRelativePath } from '../native/fontFile';
 import { requestNativeFont } from '../native/fontBridge';
 
@@ -216,7 +217,7 @@ export async function embedSceneFonts(families: string[], sources?: FontSources)
     if (!encoded) continue;
     embedded.push({ ...face, dataUrl: `data:${mimeFor(face.format, face.url)};base64,${encoded}` });
   }
-  const cssText = fontFaceCss(embedded);
+  const cssText = [fontFaceCss(embedded), madeFaceCss(wanted)].filter((block) => block.length > 0).join('\n');
   if (cssText) await confirmEmbeddedFonts(cssText);
   return cssText;
 }
