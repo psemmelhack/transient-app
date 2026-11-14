@@ -15,6 +15,10 @@ describe('style edits', () => {
     const note = withLayout(defaultStyle(), 'note');
     expect(note.layout).toBe('note');
     expect(note.recipeId).toBe('note-generic');
+    const jam = withLayout(defaultStyle(), 'jam');
+    expect(jam.layout).toBe('jam');
+    expect(jam.recipeId).toBe('jam-generic');
+    expect(jam.presetId).toBeNull();
   });
 
   it('keeps the background when Auto is off', () => {

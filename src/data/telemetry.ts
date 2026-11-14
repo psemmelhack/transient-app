@@ -419,6 +419,11 @@ function formatSpeed(value: number | null | undefined): string | null {
   return `${shown.toFixed(1)} mph`;
 }
 
+/** The speed line the card would show, or null at or below 1 mph. */
+export function shownSpeed(value: number | null | undefined): string | null {
+  return formatSpeed(value);
+}
+
 function formatBattery(level: number): string {
   return `${Math.round(level * 100)}%`;
 }

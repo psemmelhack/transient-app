@@ -34,7 +34,8 @@ function sceneFontShorthands(scene: Scene): string[] {
           addSpec(specs, block.labelFont, block.labelSize);
         } else addSpec(specs, block.font, block.fontSize);
       }
-    } else if (node.kind === 'mark' || node.kind === 'kicker' || node.kind === 'header-split') addSpec(specs, node.font, node.fontSize);
+    } else if (node.kind === 'jam') addSpec(specs, node.font, Math.max(node.fontSize, 64));
+    else if (node.kind === 'mark' || node.kind === 'kicker' || node.kind === 'header-split') addSpec(specs, node.font, node.fontSize);
     else if (node.kind === 'placeholder') {
       addSpec(specs, node.font, 22);
       addSpec(specs, node.subFont, 16);

@@ -15,7 +15,7 @@ function isAlign(value: unknown): value is Align {
 }
 
 function isLayout(value: unknown): value is LayoutMode {
-  return value === 'poster' || value === 'quiet' || value === 'note';
+  return value === 'poster' || value === 'quiet' || value === 'note' || value === 'jam';
 }
 
 function isFormat(value: unknown): value is FormatId {
