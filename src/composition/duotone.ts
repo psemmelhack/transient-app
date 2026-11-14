@@ -64,6 +64,26 @@ function channel(value: number): number {
   return Math.round(Math.min(255, Math.max(0, value)));
 }
 
+function writeDuotone(source: Uint8ClampedArray, levels: ArrayLike<number> | null, stops: DuotoneStops, level: number, out: Uint8ClampedArray): void {
+  const amount = Math.min(1, Math.max(0, level));
+  if (amount <= 0) {
+    out.set(source);
+    return;
+  }
+  const shadow = stops.shadow.map((value) => value * 255);
+  const highlight = stops.highlight.map((value) => value * 255);
+  for (let pixel = 0, index = 0; index < source.length; pixel += 1, index += 4) {
+    const y = levels ? levels[pixel]! : luma(source[index]!, source[index + 1]!, source[index + 2]!);
+    const toneR = shadow[0]! + (highlight[0]! - shadow[0]!) * y;
+    const toneG = shadow[1]! + (highlight[1]! - shadow[1]!) * y;
+    const toneB = shadow[2]! + (highlight[2]! - shadow[2]!) * y;
+    out[index] = channel(source[index]! + (toneR - source[index]!) * amount);
+    out[index + 1] = channel(source[index + 1]! + (toneG - source[index + 1]!) * amount);
+    out[index + 2] = channel(source[index + 2]! + (toneB - source[index + 2]!) * amount);
+    out[index + 3] = source[index + 3]!;
+  }
+}
+
 /** Rec.709 luma, eased so midtones keep some of the photograph. */
 function luma(r: number, g: number, b: number): number {
   const y = (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
@@ -75,30 +95,49 @@ function luma(r: number, g: number, b: number): number {
  * Level 0 is the original. Level 1 is the full map.
  */
 export function applyDuotone(pixels: Uint8ClampedArray, stops: DuotoneStops, level: number): { pixels: Uint8ClampedArray; luminance: number } {
-  const out = new Uint8ClampedArray(pixels);
-  const amount = Math.min(1, Math.max(0, level));
-  if (amount <= 0) return { pixels: out, luminance: averageLuminance(out) };
-  const shadow = stops.shadow.map((channel) => channel * 255);
-  const highlight = stops.highlight.map((channel) => channel * 255);
-  for (let i = 0; i < out.length; i += 4) {
-    const y = luma(out[i]!, out[i + 1]!, out[i + 2]!);
-    const toneR = shadow[0]! + (highlight[0]! - shadow[0]!) * y;
-    const toneG = shadow[1]! + (highlight[1]! - shadow[1]!) * y;
-    const toneB = shadow[2]! + (highlight[2]! - shadow[2]!) * y;
-    out[i] = channel(out[i]! + (toneR - out[i]!) * amount);
-    out[i + 1] = channel(out[i + 1]! + (toneG - out[i + 1]!) * amount);
-    out[i + 2] = channel(out[i + 2]! + (toneB - out[i + 2]!) * amount);
-  }
+  const out = new Uint8ClampedArray(pixels.length);
+  writeDuotone(pixels, null, stops, level, out);
   return { pixels: out, luminance: averageLuminance(out) };
 }
 
+export interface HeldTone {
+  /** Source JPEG the bake was made from. Not the baked image. */
+  jpeg: string;
+  level: number;
+  tone: string;
+  text: string;
+  photo: PosterPhoto;
+}
+
+/**
+ * The card keeps the last bake for this photo while a new level or color is still rendering.
+ * Level 0 is the original. A different photo does not reuse the previous bake.
+ */
+export function selectDisplayedPhoto(photo: PosterPhoto | null, level: number, held: HeldTone | null): PosterPhoto | null {
+  if (!photo) return null;
+  if (level <= 0 || !held || held.jpeg !== photo.jpeg) return photo;
+  return held.photo;
+}
+
 const decoded = new Map<string, ImageData>();
+const lumaTables = new Map<string, Float32Array>();
+const frameBuffers = new WeakMap<HTMLCanvasElement, ImageData>();
 
 function remember(jpeg: string, image: ImageData): void {
+  const count = image.width * image.height;
+  const table = new Float32Array(count);
+  const data = image.data;
+  for (let pixel = 0, index = 0; pixel < count; pixel += 1, index += 4) {
+    table[pixel] = luma(data[index]!, data[index + 1]!, data[index + 2]!);
+  }
   decoded.set(jpeg, image);
-  if (decoded.size <= 2) return;
-  const oldest = decoded.keys().next().value;
-  if (oldest) decoded.delete(oldest);
+  lumaTables.set(jpeg, table);
+  while (decoded.size > 2) {
+    const oldest = decoded.keys().next().value;
+    if (!oldest) break;
+    decoded.delete(oldest);
+    lumaTables.delete(oldest);
+  }
 }
 
 function loadImage(src: string): Promise<HTMLImageElement> {
@@ -123,6 +162,36 @@ async function pixelsFor(jpeg: string): Promise<ImageData> {
   const image = context.getImageData(0, 0, canvas.width, canvas.height);
   remember(jpeg, image);
   return image;
+}
+
+/** Decode the working photo so the next slider move can paint without waiting. */
+export function ensureDuotonePixels(jpeg: string): Promise<void> {
+  return pixelsFor(jpeg).then(() => undefined);
+}
+
+/**
+ * Paint the current duotone into a canvas already on screen.
+ * Returns null until the source pixels are decoded. The JPEG bake can follow later.
+ */
+export function paintDuotoneCanvas(canvas: HTMLCanvasElement, photo: PosterPhoto, toneHex: string, textHex: string, level: number): number | null {
+  const source = decoded.get(photo.jpeg);
+  const levels = lumaTables.get(photo.jpeg);
+  if (!source || !levels) return null;
+  const amount = Math.round(Math.min(1, Math.max(0, level)) * 100) / 100;
+  const context = canvas.getContext('2d');
+  if (!context) return null;
+  if (canvas.width !== source.width || canvas.height !== source.height) {
+    canvas.width = source.width;
+    canvas.height = source.height;
+  }
+  let frame = frameBuffers.get(canvas);
+  if (!frame || frame.width !== source.width || frame.height !== source.height) {
+    frame = context.createImageData(source.width, source.height);
+    frameBuffers.set(canvas, frame);
+  }
+  writeDuotone(source.data, levels, duotoneStops(toneHex, textHex), amount, frame.data);
+  context.putImageData(frame, 0, 0);
+  return averageLuminance(frame.data);
 }
 
 const results = new Map<string, PosterPhoto>();

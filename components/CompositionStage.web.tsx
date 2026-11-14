@@ -27,9 +27,11 @@ import type {
 interface Props {
   scene: Scene;
   full?: boolean;
+  /** Live duotone canvas sits over the photo until the baked JPEG is ready. */
+  photoLive?: boolean;
 }
 
-export const CompositionStage = forwardRef<HTMLDivElement, Props>(function CompositionStage({ scene, full }, ref) {
+export const CompositionStage = forwardRef<HTMLDivElement, Props>(function CompositionStage({ scene, full, photoLive = false }, ref) {
   const frameRef = useRef<HTMLDivElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
   const [scale, setScale] = useState(full ? 1 : 0.25);
@@ -94,6 +96,18 @@ export const CompositionStage = forwardRef<HTMLDivElement, Props>(function Compo
               draggable={false}
               decoding="sync"
               style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', pointerEvents: 'none' }}
+            />
+            <canvas
+              data-role="poster-live"
+              aria-hidden="true"
+              style={{
+                position: 'absolute',
+                inset: 0,
+                width: '100%',
+                height: '100%',
+                opacity: photoLive ? 1 : 0,
+                pointerEvents: 'none',
+              }}
             />
             <div
               data-role="poster-scrim"

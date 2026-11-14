@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { contrastRatio } from '../color/contrast';
 import { rgbToHex } from '../color/oklch';
-import { applyDuotone, duotoneStops } from './duotone';
+import { applyDuotone, duotoneStops, selectDisplayedPhoto, type HeldTone } from './duotone';
 
 function solid(r: number, g: number, b: number, count = 1): Uint8ClampedArray {
   const pixels = new Uint8ClampedArray(count * 4);
@@ -61,5 +61,16 @@ describe('duotone', () => {
     const first = applyDuotone(source, stops, 0.7);
     const second = applyDuotone(source, stops, 0.7);
     expect(Array.from(first.pixels)).toEqual(Array.from(second.pixels));
+  });
+
+  it('keeps the last duotone on screen while a new level or color is still baking', () => {
+    const original = { jpeg: 'data:image/jpeg;base64,aaaa', luminance: 0.4 };
+    const baked = { jpeg: 'data:image/jpeg;base64,bbbb', luminance: 0.3 };
+    const held: HeldTone = { jpeg: original.jpeg, level: 1, tone: '#1E3A2D', text: '#161513', photo: baked };
+    expect(selectDisplayedPhoto(null, 1, held)).toBeNull();
+    expect(selectDisplayedPhoto(original, 0, held)).toBe(original);
+    expect(selectDisplayedPhoto(original, 0.4, held)).toBe(baked);
+    expect(selectDisplayedPhoto(original, 1, { ...held, tone: '#14203A' })).toBe(baked);
+    expect(selectDisplayedPhoto({ jpeg: 'data:image/jpeg;base64,cccc', luminance: 0.2 }, 1, held)?.jpeg).toBe('data:image/jpeg;base64,cccc');
   });
 });
