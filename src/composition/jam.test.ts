@@ -2,67 +2,69 @@ import { describe, expect, it } from 'vitest';
 import { exampleMoment, EXAMPLE_INSTANT } from '../data/moment';
 import { withLayout, withMeasurement } from '../style/edit';
 import { defaultStyle } from '../style/presets';
-import { JAM_SEPARATOR, jamFields, planJam, planJamGrid, weaveFields } from './jam';
+import { jamFields, layoutJam, wrapJam } from './jam';
 
 const moment = exampleMoment(EXAMPLE_INSTANT);
 
-function dataOf(glyphs: string, fields: string[]): string {
-  let rest = glyphs;
-  for (const field of fields) {
-    const at = rest.indexOf(field);
-    expect(at).toBeGreaterThanOrEqual(0);
-    expect([...rest.slice(0, at)].every((glyph) => glyph === JAM_SEPARATOR)).toBe(true);
-    rest = rest.slice(at + field.length);
-  }
-  expect([...rest].every((glyph) => glyph === JAM_SEPARATOR)).toBe(true);
-  return fields.join('');
+function joined(advances: number[], layout: ReturnType<typeof layoutJam>): string {
+  return layout.lines.map((line) => `${line.start}:${line.end}`).join('|');
 }
 
-describe('jam grid', () => {
-  it('uses one even square when the length is a square', () => {
-    const text = 'ABCDEFGHIJKLMNOP';
-    const plan = planJam([text], 1080, 1080);
-    expect(plan.columns).toBe(4);
-    expect(plan.rows).toBe(4);
-    expect(plan.glyphs).toBe(text);
-    expect(plan.fontSize).toBe(1080 / 4);
+describe('jam wrap', () => {
+  it('breaks at any character once the next glyph does not fit', () => {
+    const lines = wrapJam([1, 1, 1, 1], 4, 10);
+    expect(lines.map((line) => [line.start, line.end])).toEqual([
+      [0, 2],
+      [2, 4],
+    ]);
+    const narrow = wrapJam([0.2, 0.2, 0.2, 0.2, 3], 4, 10);
+    expect(narrow[0]?.end).toBe(4);
+    expect(narrow[1]).toEqual({ start: 4, end: 5, width: 12 });
   });
 
-  it('prefers an even split whose cells are near square', () => {
-    const grid = planJamGrid(48, 1080, 1080);
-    expect(grid.extra).toBe(0);
-    expect(grid.columns * grid.rows).toBe(48);
-    expect(grid.columns).toBe(6);
-    expect(grid.rows).toBe(8);
-  });
-
-  it('pads a few cells with separators instead of repeating the data', () => {
-    const fields = ['ABCDE', 'FGHIJ', 'KLMNO'];
-    const plan = planJam(fields, 1080, 1080);
-    expect(plan.glyphs).not.toContain(fields.join('').repeat(2));
-    expect(dataOf(plan.glyphs, fields)).toBe(fields.join(''));
-    expect(plan.glyphs.length).toBe(plan.columns * plan.rows);
-    expect(plan.rows).toBe(plan.glyphs.length / plan.columns);
-    expect(plan.columns).toBeGreaterThan(1);
-    expect(plan.rows).toBeGreaterThan(1);
-    const ratio = 1080 / plan.columns / (1080 / plan.rows);
-    expect(ratio).toBeGreaterThan(1 / 1.5);
-    expect(ratio).toBeLessThan(1.5 + 1e-6);
+  it('justifies every line, including the last, and fills the height with equal rows', () => {
+    const advances = [1, 1, 1, 1, 1];
+    const layout = layoutJam(advances, 10, 100);
+    expect(layout.lines).toHaveLength(2);
+    expect(layout.fontSize).toBeCloseTo(10 / 3, 4);
+    expect(layout.lineHeight * layout.lines.length).toBeCloseTo(100, 5);
+    const text = layout.lines.map((line) => advances.slice(line.start, line.end).length);
+    expect(text).toEqual([3, 2]);
+    for (const line of layout.lines) {
+      const used = advances.slice(line.start, line.end).reduce((sum, advance) => sum + advance, 0) * layout.fontSize;
+      expect(used).toBeLessThanOrEqual(10 + 0.05);
+      expect(used + line.gap * (line.end - line.start - 1)).toBeCloseTo(10, 3);
+    }
+    expect(joined(advances, layout)).toBe('0:3|3:5');
   });
 
   it('grows the type when there is less data', () => {
-    const short = planJam(['AB'], 1080, 1080);
-    const long = planJam(['A'.repeat(400)], 1080, 1080);
+    const short = layoutJam([0.6, 0.6], 1080, 1080);
+    const long = layoutJam(Array.from({ length: 180 }, () => 0.6), 1080, 1080);
     expect(short.fontSize).toBeGreaterThan(long.fontSize);
-    expect(short.glyphs.replaceAll(JAM_SEPARATOR, '')).toBe('AB');
-    expect(long.glyphs).toBe('A'.repeat(400));
-    expect(short.glyphs.length).toBe(short.columns * short.rows);
-    expect(long.glyphs.length).toBe(long.columns * long.rows);
+    expect(short.lines).toHaveLength(1);
+    expect(long.lines.length).toBeGreaterThan(1);
+    expect(long.lineHeight * long.lines.length).toBeCloseTo(1080, 4);
+    const covered = long.lines[long.lines.length - 1]?.end;
+    expect(covered).toBe(180);
   });
 
-  it('spreads separators between fields', () => {
-    expect(weaveFields(['AB', 'CD', 'EF'], 2)).toBe(`AB${JAM_SEPARATOR}CD${JAM_SEPARATOR}EF`);
-    expect(weaveFields(['ABCDE'], 4)).toBe(`A${JAM_SEPARATOR}B${JAM_SEPARATOR}C${JAM_SEPARATOR}D${JAM_SEPARATOR}E`);
+  it('keeps proportional glyphs at one size and does not repeat them', () => {
+    const advances = [0.3, 0.3, 0.3, 0.3, 1.4, 1.4, 0.25, 0.25, 0.25, 0.25];
+    const layout = layoutJam(advances, 200, 200);
+    expect(layout.fontSize).toBeGreaterThan(0);
+    let cursor = 0;
+    for (const line of layout.lines) {
+      expect(line.start).toBe(cursor);
+      expect(line.end).toBeGreaterThan(line.start);
+      const used = advances.slice(line.start, line.end).reduce((sum, advance) => sum + advance * layout.fontSize, 0);
+      expect(used).toBeLessThanOrEqual(200 + 0.05);
+      if (line.end - line.start > 1) {
+        expect(used + line.gap * (line.end - line.start - 1)).toBeCloseTo(200, 2);
+      }
+      cursor = line.end;
+    }
+    expect(cursor).toBe(advances.length);
   });
 });
 

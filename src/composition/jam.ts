@@ -4,28 +4,25 @@ import type { Moment } from '../data/moment';
 import type { Style } from '../style/types';
 import { momentText } from './text';
 
-/**
- * One character used to fill a grid cell that the data does not cover.
- * It is never a copy of the data. A dot stays visible; a space would look empty.
- */
-export const JAM_SEPARATOR = '\u00b7';
-
-/** Cell width/height may sit this far from 1 before a square-er padded grid is preferred. */
-const GOOD_ASPECT = Math.log(1.5);
-
-export interface JamPlan {
-  glyphs: string;
-  columns: number;
-  rows: number;
-  /** Em size shared by every glyph. The cell height, so a short string is larger type. */
-  fontSize: number;
+export interface JamLine {
+  start: number;
+  end: number;
+  /** Extra pixels between glyphs so this line, including the last, meets both edges. */
+  gap: number;
 }
 
-interface GridChoice {
-  columns: number;
-  rows: number;
-  extra: number;
-  err: number;
+export interface JamLayout {
+  /** One size for every glyph. */
+  fontSize: number;
+  /** Each row's box. The rows together are the card height. */
+  lineHeight: number;
+  lines: JamLine[];
+}
+
+interface WrappedLine {
+  start: number;
+  end: number;
+  width: number;
 }
 
 function densify(value: string | null | undefined): string {
@@ -63,101 +60,83 @@ export function jamFields(style: Style, moment: Moment, message: string): string
   return fields;
 }
 
-function gridChoice(columns: number, count: number, width: number, height: number): GridChoice {
-  const rows = Math.ceil(count / columns);
-  const extra = columns * rows - count;
-  const ratio = width / columns / (height / rows);
-  return { columns, rows, extra, err: Math.abs(Math.log(ratio)) };
+export function jamText(style: Style, moment: Moment, message: string): string {
+  return jamFields(style, moment, message).join('');
 }
 
-function prefer(next: GridChoice, current: GridChoice): boolean {
-  if (next.extra !== current.extra) return next.extra < current.extra;
-  if (Math.abs(next.err - current.err) > 1e-9) return next.err < current.err;
-  const nextWide = next.rows >= next.columns;
-  const currentWide = current.rows >= current.columns;
-  if (nextWide !== currentWide) return nextWide;
-  return false;
+/** Greedy character wrap. `advances` are widths at font size 1. */
+export function wrapJam(advances: number[], size: number, width: number): WrappedLine[] {
+  const lines: WrappedLine[] = [];
+  const limit = Math.max(1, width);
+  let index = 0;
+  while (index < advances.length) {
+    let end = index;
+    let used = 0;
+    while (end < advances.length) {
+      const next = Math.max(0, advances[end] ?? 0) * size;
+      if (end > index && used + next > limit) break;
+      used += next;
+      end += 1;
+    }
+    if (end === index) {
+      end = index + 1;
+      used = Math.max(0, advances[index] ?? 0) * size;
+    }
+    lines.push({ start: index, end, width: used });
+    index = end;
+  }
+  return lines;
 }
 
-function pushChoice(choices: GridChoice[], columns: number, rows: number, count: number, width: number, height: number) {
-  if (columns < 1 || rows < 1) return;
-  const extra = columns * rows - count;
-  if (extra < 0) return;
-  const ratio = width / columns / (height / rows);
-  if (!(ratio > 0)) return;
-  choices.push({ columns, rows, extra, err: Math.abs(Math.log(ratio)) });
+function fits(advances: number[], size: number, width: number, height: number): boolean {
+  if (!(size > 0)) return false;
+  const lines = wrapJam(advances, size, width);
+  if (lines.length * size > height + 0.05) return false;
+  const shared = advances.length >= 2;
+  for (const line of lines) {
+    if (line.width > width + 0.05) return false;
+    if (shared && line.end - line.start < 2) return false;
+  }
+  return lines.length > 0;
 }
 
 /**
- * Columns and rows whose product covers `count`.
- * An even split with a near-square cell wins. Otherwise the fewest separator
- * cells that still keep the cell aspect near square. Rows may be one step
- * past ceil(count/columns) so a short string can grow into a fuller square
- * instead of stretching into a single strip.
+ * Largest type size whose greedy lines still fit the square.
+ * Rows then split the height evenly, and each line's spare width becomes
+ * the gap between its glyphs. A short string therefore sets larger type.
+ * `advances` are per-glyph widths at font size 1, in the face being set.
  */
-export function planJamGrid(count: number, width: number, height: number): GridChoice {
-  const length = Math.max(1, Math.floor(count));
+export function layoutJam(advances: number[], width: number, height: number): JamLayout {
   const cardW = width > 0 ? width : 1;
   const cardH = height > 0 ? height : 1;
-  const maxColumns = Math.min(length, Math.max(1, Math.ceil(Math.sqrt((length * 1.5 * cardW) / cardH)) + 2));
-  const choices: GridChoice[] = [];
-  for (let columns = 1; columns <= maxColumns; columns += 1) {
-    const minRows = Math.ceil(length / columns);
-    const low = Math.max(1, Math.ceil((columns * cardH) / cardW / 1.5));
-    const high = Math.max(low, Math.floor((columns * cardH * 1.5) / cardW));
-    const rows = new Set<number>([minRows]);
-    for (let row = Math.max(minRows, low); row <= Math.max(minRows, high); row += 1) rows.add(row);
-    for (const row of rows) pushChoice(choices, columns, row, length, cardW, cardH);
+  const widths = advances.length > 0 ? advances.map((advance) => (advance > 0 ? advance : 0.01)) : [0.5];
+  let low = 0;
+  let high = cardH;
+  for (let step = 0; step < 48; step += 1) {
+    const mid = (low + high) / 2;
+    if (fits(widths, mid, cardW, cardH)) low = mid;
+    else high = mid;
   }
-  if (choices.length === 0) return gridChoice(1, length, cardW, cardH);
-  const good = choices.filter((choice) => choice.err <= GOOD_ASPECT + 1e-6);
-  const pool = good.length > 0 ? good : choices;
-  return pool.reduce((current, next) => (prefer(next, current) ? next : current));
-}
-
-function weaveInside(text: string, extra: number): string {
-  const gaps = text.length - 1;
-  if (gaps <= 0) return text + JAM_SEPARATOR.repeat(extra);
-  const counts = new Array<number>(gaps).fill(0);
-  for (let index = 0; index < extra; index += 1) counts[index % gaps] += 1;
-  let out = text[0] ?? '';
-  for (let gap = 0; gap < gaps; gap += 1) {
-    out += JAM_SEPARATOR.repeat(counts[gap] ?? 0);
-    out += text[gap + 1] ?? '';
+  let size = low > 0.5 ? low : Math.min(cardH, cardW);
+  let lines = wrapJam(widths, size, cardW);
+  if (lines.length > 0) {
+    const grown = cardH / lines.length;
+    if (grown > size + 0.1 && fits(widths, grown, cardW, cardH)) {
+      const next = wrapJam(widths, grown, cardW);
+      if (next.length === lines.length) {
+        size = grown;
+        lines = next;
+      }
+    }
   }
-  return out;
-}
-
-/** Insert `extra` separator glyphs between fields. The data itself is not repeated. */
-export function weaveFields(fields: string[], extra: number): string {
-  const parts = fields.filter((field) => field.length > 0);
-  if (parts.length === 0) return JAM_SEPARATOR.repeat(Math.max(0, extra));
-  if (extra <= 0) return parts.join('');
-  if (parts.length === 1) return weaveInside(parts[0] ?? '', extra);
-  const gaps = parts.length - 1;
-  const counts = new Array<number>(gaps).fill(0);
-  for (let index = 0; index < extra; index += 1) counts[index % gaps] += 1;
-  let out = parts[0] ?? '';
-  for (let gap = 0; gap < gaps; gap += 1) {
-    out += JAM_SEPARATOR.repeat(counts[gap] ?? 0);
-    out += parts[gap + 1] ?? '';
-  }
-  return out;
-}
-
-/** One grid-filling string. Short data becomes larger cells, never a second copy. */
-export function planJam(fields: string[], width: number, height: number): JamPlan {
-  const parts = fields.filter((field) => field.length > 0);
-  const count = parts.reduce((sum, field) => sum + field.length, 0);
-  const cardH = height > 0 ? height : 1;
-  if (count === 0) {
-    return { glyphs: JAM_SEPARATOR, columns: 1, rows: 1, fontSize: cardH };
-  }
-  const grid = planJamGrid(count, width, cardH);
+  const lineHeight = cardH / Math.max(1, lines.length);
   return {
-    glyphs: weaveFields(parts, grid.extra),
-    columns: grid.columns,
-    rows: grid.rows,
-    fontSize: cardH / grid.rows,
+    fontSize: size,
+    lineHeight,
+    lines: lines.map((line) => {
+      const count = line.end - line.start;
+      const gap = count > 1 ? Math.max(0, (cardW - line.width) / (count - 1)) : 0;
+      return { start: line.start, end: line.end, gap };
+    }),
   };
 }

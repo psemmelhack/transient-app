@@ -8,7 +8,7 @@ import { FORMATS } from './formats';
 import { getFont, resolveFont, type CssFont, type FontRole } from './fonts';
 import { madeFamily } from './madeFont';
 import { withMadePlace } from '../style/edit';
-import { jamFields, planJam } from './jam';
+import { jamText } from './jam';
 import { layoutPosterNote, noteFace, noteFontSize, noteMaxWidth, noteRhythm, NOTE_LEADING, wrappedLineCount } from './note';
 import { getRecipe, type PosterRecipe, type QuietBlockSpec, type QuietRecipe } from './recipes';
 import { clockLabel, coordLines, linesFor, MARK, momentText, renderToken, type CoordLineModel } from './text';
@@ -230,16 +230,12 @@ export interface HeaderSplitNode {
 
 export interface JamNode {
   kind: 'jam';
-  /** One glyph per cell. Length is columns times rows. Separators fill gaps; data is not repeated. */
-  glyphs: string;
-  columns: number;
-  rows: number;
+  /** The readings once, with spaces removed. Nothing is repeated. */
+  text: string;
   font: CssFont;
-  /** Shared em size. Equal to the cell height. */
-  fontSize: number;
-  /** Cell width divided by cell height. Every glyph is stretched by the same amount. */
-  aspect: number;
   color: string;
+  width: number;
+  height: number;
 }
 
 export interface PlaceholderNode {
@@ -350,18 +346,14 @@ function paintForPhoto(style: Style, look: { textColor: string; footerColor: str
 
 function jamNode(style: Style, moment: Moment, message: string): JamNode {
   const format = FORMATS[style.format];
-  const planned = planJam(jamFields(style, moment, message), format.width, format.height);
-  const font = style.displayFontId === 'made' ? fontOf(style, 'display') : fontOf(style, 'mono');
-  const fontSize = format.height / planned.rows;
+  const text = jamText(style, moment, message);
   return {
     kind: 'jam',
-    glyphs: planned.glyphs,
-    columns: planned.columns,
-    rows: planned.rows,
-    font,
-    fontSize,
-    aspect: format.width / planned.columns / fontSize,
+    text: text || '\u00b7',
+    font: fontOf(style, 'display'),
     color: style.textColor,
+    width: format.width,
+    height: format.height,
   };
 }
 

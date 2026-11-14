@@ -1,4 +1,5 @@
 import { forwardRef, memo, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
+import { flushSync } from 'react-dom';
 import type { CssFont } from '../src/composition/fonts';
 import { fontCss } from '../src/composition/fonts';
 import { lineCanTrim, sizeFromDomLayout } from '../src/composition/domFit';
@@ -7,6 +8,7 @@ import { replaceFitReport } from '../src/composition/fitReport';
 import { cssFontShorthand, ensureFonts, familyReady, fontsStatus, fontSnapshots } from '../src/composition/fontReady';
 import { heroScaleToClear, scaleClearanceBox } from '../src/composition/heroClearance';
 import { fitSpreadTelemetry } from '../src/composition/telemetryFit';
+import { layoutJam, type JamLayout } from '../src/composition/jam';
 import { noteRhythm, wrapNote } from '../src/composition/note';
 import { beginFit, endFit } from '../src/composition/fitSession';
 import { isNativeShell } from '../src/native/shell';
@@ -128,7 +130,7 @@ function nodeKey(node: SceneNode, index: number): string {
   if (node.kind === 'fit-stack') return `fit-${node.lines.join('|')}-${node.font.family}-${node.top}`;
   if (node.kind === 'footer') return `foot-${node.metaLines.join('|')}-${node.message?.text ?? ''}-${node.extraLines.join('|')}`;
   if (node.kind === 'quiet') return `quiet-${index}-${node.blocks.length}`;
-  if (node.kind === 'jam') return `jam-${node.columns}x${node.rows}-${node.font.family}-${node.fontSize}`;
+  if (node.kind === 'jam') return `jam-${node.font.family}-${node.text.length}-${node.width}x${node.height}`;
   return `${node.kind}-${index}`;
 }
 
@@ -155,24 +157,20 @@ function NodeView({ node }: { node: SceneNode }) {
   }
 }
 
-function measureJam(root: HTMLElement): { x: number; y: number } | null {
-  const probe = root.querySelector('[data-jam-probe]');
-  const cell = root.querySelector('[data-jam-cell]');
-  if (!(probe instanceof HTMLElement) || !(cell instanceof HTMLElement)) return null;
-  const advance = probe.getBoundingClientRect();
-  const box = cell.getBoundingClientRect();
-  if (!(advance.width > 0) || !(advance.height > 0) || !(box.width > 0) || !(box.height > 0)) return null;
-  return { x: box.width / advance.width, y: box.height / advance.height };
-}
+const JAM_PROBE = 100;
 
 function Jam({ node }: { node: JamNode }) {
   const rootRef = useRef<HTMLDivElement>(null);
   const face = fontCss(node.font);
-  const key = `${node.columns}x${node.rows}:${node.fontSize}:${node.font.family}:${node.font.weight}:${node.font.style}`;
-  const guess = { x: node.aspect > 0 ? node.aspect / 0.6 : 1, y: 1 };
-  const [held, setHeld] = useState({ key, scale: guess });
-  const scale = held.key === key ? held.scale : guess;
-  const glyphs = Array.from(node.glyphs);
+  const glyphs = Array.from(node.text);
+  const key = `${node.text}|${node.font.family}|${node.font.weight}|${node.font.style}|${node.font.variation ?? ''}|${node.width}x${node.height}`;
+  const guess = layoutJam(glyphs.map(() => 0.5), node.width, node.height);
+  const [held, setHeld] = useState<{ key: string; layout: JamLayout; advances: number[] }>({
+    key,
+    layout: guess,
+    advances: glyphs.map(() => 0.5),
+  });
+  const ready = held.key === key ? held : { key, layout: guess, advances: glyphs.map(() => 0.5) };
 
   useLayoutEffect(() => {
     const root = rootRef.current;
@@ -187,20 +185,47 @@ function Jam({ node }: { node: JamNode }) {
     };
     beginFit();
     const hold = () => {
-      const next = measureJam(root);
-      if (!next || closed) return;
-      setHeld((current) => {
-        if (
-          current.key === key &&
-          Math.abs(current.scale.x - next.x) < 0.001 &&
-          Math.abs(current.scale.y - next.y) < 0.001
-        ) {
-          return current;
-        }
-        return { key, scale: next };
-      });
+      const row = root.querySelector('[data-jam-probes]');
+      const probes = [...root.querySelectorAll('[data-jam-probe]')].filter((probe): probe is HTMLElement => probe instanceof HTMLElement);
+      if (!(row instanceof HTMLElement) || probes.length === 0 || closed) return;
+      const read = (size: number) => {
+        row.style.fontSize = `${size}px`;
+        return probes.map((probe) => {
+          const width = probe.offsetWidth;
+          return (width > 0 ? width : 0.01) / size;
+        });
+      };
+      const commit = (layout: JamLayout, advances: number[]) => {
+        flushSync(() => {
+          setHeld((current) => {
+            const same =
+              current.key === key &&
+              current.layout.lines.length === layout.lines.length &&
+              Math.abs(current.layout.fontSize - layout.fontSize) < 0.05 &&
+              current.layout.lines.every((line, index) => line.start === layout.lines[index]?.start && line.end === layout.lines[index]?.end);
+            return same ? current : { key, layout, advances };
+          });
+        });
+      };
+      const overflow = () => {
+        const rows = [...root.querySelectorAll('[data-jam-line]')].filter((row): row is HTMLElement => row instanceof HTMLElement);
+        return rows.reduce((worst, row) => Math.max(worst, row.scrollWidth - row.clientWidth), 0);
+      };
+      let advances = read(JAM_PROBE);
+      let layout = layoutJam(advances, node.width, node.height);
+      for (let pass = 0; pass < 4; pass += 1) {
+        advances = read(layout.fontSize);
+        layout = layoutJam(advances, node.width, node.height);
+        commit(layout, advances);
+        const extra = overflow();
+        if (extra <= 1 || closed) break;
+        const factor = (node.width + extra) / node.width;
+        advances = advances.map((advance) => advance * factor);
+        layout = layoutJam(advances, node.width, node.height);
+        commit(layout, advances);
+      }
     };
-    void ensureFonts([cssFontShorthand(node.font, node.fontSize)])
+    void ensureFonts([cssFontShorthand(node.font, 160)])
       .catch(() => undefined)
       .then(() => {
         if (closed) return;
@@ -216,8 +241,8 @@ function Jam({ node }: { node: JamNode }) {
       cancelAnimationFrame(second);
       close();
     };
-    // The face and the cell size are in `key`. A new font object with the same values
-    // should not measure again.
+    // `key` already covers the text, the face, and the card size. The font
+    // object is rebuilt on every clock tick and must not remeasure by itself.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key]);
 
@@ -228,57 +253,77 @@ function Jam({ node }: { node: JamNode }) {
       style={{
         position: 'absolute',
         inset: 0,
-        display: 'grid',
-        gridTemplateColumns: `repeat(${node.columns}, minmax(0, 1fr))`,
-        gridTemplateRows: `repeat(${node.rows}, minmax(0, 1fr))`,
+        display: 'flex',
+        flexDirection: 'column',
         overflow: 'hidden',
         color: node.color,
+        fontKerning: 'none',
         ...face,
       }}
     >
-      <span
-        data-jam-probe=""
+      <div
+        data-jam-probes=""
         aria-hidden="true"
         style={{
           position: 'absolute',
           left: 0,
           top: 0,
-          visibility: 'hidden',
+          width: 0,
+          height: 0,
+          overflow: 'hidden',
+          whiteSpace: 'nowrap',
+          opacity: 0,
           pointerEvents: 'none',
-          fontSize: node.fontSize,
+          fontSize: JAM_PROBE,
           lineHeight: 1,
+          fontKerning: 'none',
         }}
       >
-        0
-      </span>
-      {glyphs.map((glyph, index) => (
-        <span
-          key={index}
-          data-jam-cell={index === 0 ? '' : undefined}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            minWidth: 0,
-            minHeight: 0,
-            overflow: 'hidden',
-            fontSize: node.fontSize,
-            lineHeight: 1,
-          }}
-        >
-          <span
-            data-jam-glyph=""
-            style={{
-              display: 'block',
-              lineHeight: 1,
-              transform: `scale(${scale.x}, ${scale.y})`,
-              transformOrigin: 'center center',
-            }}
-          >
+        {glyphs.map((glyph, index) => (
+          <span key={index} data-jam-probe="" style={{ display: 'inline-block', lineHeight: 1 }}>
             {glyph}
           </span>
-        </span>
-      ))}
+        ))}
+      </div>
+      {ready.layout.lines.map((line, lineIndex) => {
+        const chars = glyphs.slice(line.start, line.end);
+        const alone = chars.length === 1;
+        const advance = alone ? (ready.advances[line.start] ?? 0) * ready.layout.fontSize : 0;
+        const scaleX = alone && advance > 0 ? node.width / advance : 1;
+        return (
+          <div
+            key={lineIndex}
+            data-jam-line=""
+            style={{
+              flex: '1 1 0',
+              minHeight: 0,
+              minWidth: 0,
+              display: 'flex',
+              flexDirection: 'row',
+              justifyContent: alone ? 'flex-start' : 'space-between',
+              alignItems: 'center',
+              fontSize: ready.layout.fontSize,
+              lineHeight: 1,
+            }}
+          >
+            {chars.map((glyph, index) => (
+              <span
+                key={index}
+                data-jam-glyph=""
+                style={{
+                  display: 'block',
+                  flex: '0 0 auto',
+                  lineHeight: 1,
+                  transform: alone ? `scaleX(${scaleX})` : undefined,
+                  transformOrigin: 'left center',
+                }}
+              >
+                {glyph}
+              </span>
+            ))}
+          </div>
+        );
+      })}
     </div>
   );
 }
