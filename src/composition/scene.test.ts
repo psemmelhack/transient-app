@@ -2,11 +2,12 @@ import { describe, expect, it } from 'vitest';
 import { exampleMoment, EXAMPLE_INSTANT } from '../data/moment';
 import type { SensorSample } from '../data/telemetry';
 import { contrastRatio } from '../color/contrast';
-import { withLayout } from '../style/edit';
+import { withLayout, withMeasurement } from '../style/edit';
 import { PRESETS, defaultStyle, presetById, styleFromPreset } from '../style/presets';
+import { JAM_SEPARATOR, jamFields } from './jam';
 import { noteColumns, noteFontSize, noteRhythm, wrapNote, wrappedLineCount } from './note';
 import { randomStyle } from '../style/randomize';
-import { buildScene, footerBlockHeight, quietStackHeight, type FitStackNode, type FooterNode, type QuietBlock, type QuietNode } from './scene';
+import { buildScene, footerBlockHeight, quietStackHeight, type FitStackNode, type FooterNode, type JamNode, type QuietBlock, type QuietNode } from './scene';
 
 const moment = exampleMoment(EXAMPLE_INSTANT);
 
@@ -557,5 +558,90 @@ describe('note measure', () => {
     const note = noteBlock(quiet);
     expect(note && (note.kind === 'text' || note.kind === 'note') && note.font.family).toMatch(/Mono/);
     expect(quietStackHeight(quiet.blocks)).toBeLessThanOrEqual(scene.height - quiet.top - quiet.bottom + 0.5);
+  });
+});
+
+function jamNode(style = withLayout(defaultStyle(), 'jam'), message = 'Hi', source = moment) {
+  const scene = buildScene(style, source, message);
+  const node = scene.nodes.find((item) => item.kind === 'jam');
+  if (!node || node.kind !== 'jam') throw new Error('missing jam');
+  return { scene, jam: node as JamNode };
+}
+
+function glyphsMatchFields(glyphs: string, fields: string[]) {
+  let rest = glyphs;
+  for (const field of fields) {
+    const at = rest.indexOf(field);
+    expect(at).toBeGreaterThanOrEqual(0);
+    expect([...rest.slice(0, at)].every((glyph) => glyph === JAM_SEPARATOR)).toBe(true);
+    rest = rest.slice(at + field.length);
+  }
+  expect([...rest].every((glyph) => glyph === JAM_SEPARATOR)).toBe(true);
+}
+
+describe('jam layout', () => {
+  it('fills the square with one size and one color, without repeating a short string', () => {
+    const style = withLayout(defaultStyle(), 'jam');
+    const { scene, jam } = jamNode(style, 'Hi');
+    const fields = jamFields(style, moment, 'Hi');
+    expect(scene.nodes).toHaveLength(1);
+    expect(jam.glyphs.length).toBe(jam.columns * jam.rows);
+    expect(jam.rows).toBe(jam.glyphs.length / jam.columns);
+    expect(jam.fontSize).toBe(scene.height / jam.rows);
+    expect(jam.aspect).toBeCloseTo(scene.width / jam.columns / jam.fontSize);
+    expect(jam.color).toBe(style.textColor);
+    expect(jam.font.family).toBe('IBM Plex Mono');
+    glyphsMatchFields(jam.glyphs, fields);
+    expect(jam.glyphs.split('Hi').length - 1).toBe(1);
+  });
+
+  it('sets a long note in smaller type than a short one', () => {
+    const style = withLayout(defaultStyle(), 'jam');
+    const short = jamNode(style, 'Hi').jam;
+    const note = 'A'.repeat(180);
+    const long = jamNode(style, note).jam;
+    expect(long.fontSize).toBeLessThan(short.fontSize);
+    expect(long.glyphs.length).toBe(long.columns * long.rows);
+    expect(long.glyphs.split('A').length - 1).toBe(180);
+  });
+
+  it('keeps a photo behind the type and uses Made when that face is selected', () => {
+    const photo = { jpeg: 'data:image/jpeg;base64,/9j/4AAQ', luminance: 0.2 };
+    const style = { ...withLayout(defaultStyle(), 'jam'), displayFontId: 'made' };
+    const scene = buildScene(style, moment, 'Hi', EXAMPLE_INSTANT, photo);
+    const jam = scene.nodes.find((node) => node.kind === 'jam');
+    expect(scene.photo?.href).toBe(photo.jpeg);
+    expect(jam && jam.kind === 'jam' && jam.font.family.startsWith('Made ')).toBe(true);
+    expect(jam && jam.kind === 'jam' && jam.glyphs.length).toBe(jam && jam.kind === 'jam' ? jam.columns * jam.rows : 0);
+  });
+
+  it('shows speed only above 1 mph and extended values once, without labels', () => {
+    const style = withMeasurement(withMeasurement(withLayout(defaultStyle(), 'jam'), 'telemetry', true), 'extended', true);
+    const phone = {
+      ...sensors,
+      phone: {
+        pressureHpa: 1009.4,
+        relativeAltitudeM: null,
+        magneticField: null,
+        trueHeading: null,
+        magneticHeading: null,
+        stepsToday: null,
+        gravity: null,
+        batteryState: null,
+        brightness: null,
+        networkType: null,
+        deviceModel: null,
+        illuminance: null,
+      },
+    };
+    const movingMoment = { ...moment, speed: 4.4704, accuracy: 12, sensors: phone };
+    const moving = jamNode(style, 'Here', movingMoment);
+    glyphsMatchFields(moving.jam.glyphs, jamFields(style, movingMoment, 'Here'));
+    expect(moving.jam.glyphs.split('10.0mph').length - 1).toBe(1);
+    expect(moving.jam.glyphs).toContain('1009.4hPa');
+    expect(moving.jam.glyphs).not.toContain('BARO');
+    expect(moving.jam.glyphs.split('\u00b112m').length - 1).toBe(1);
+    const still = jamNode(style, 'Here', { ...moment, speed: 0.2, sensors });
+    expect(still.jam.glyphs.includes('mph')).toBe(false);
   });
 });

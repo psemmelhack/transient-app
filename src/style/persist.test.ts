@@ -101,6 +101,13 @@ describe('saved style', () => {
     expect(loaded.photoTone).toBe(0);
   });
 
+  it('keeps a jam layout', () => {
+    const loaded = sanitizeStyle({ ...defaultStyle(), layout: 'jam', recipeId: 'jam-generic', presetId: null });
+    expect(loaded.layout).toBe('jam');
+    expect(loaded.recipeId).toBe('jam-generic');
+    expect(sanitizeStyle({ ...defaultStyle(), layout: 'jam', recipeId: 'missing' }).layout).toBe('jam');
+  });
+
   it('keeps a duotone level on the saved style and drops a bad one', () => {
     const saved = { ...defaultStyle(), photoTone: 0.45 };
     expect(sanitizeStyle(saved).photoTone).toBe(0.45);

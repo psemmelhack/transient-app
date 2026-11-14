@@ -16,6 +16,7 @@ export function withPreset(style: Style, preset: Preset): Style {
 export function recipeForLayout(layout: LayoutMode): string {
   if (layout === 'poster') return 'poster-generic';
   if (layout === 'quiet') return 'quiet-generic';
+  if (layout === 'jam') return 'jam-generic';
   return 'note-generic';
 }
 

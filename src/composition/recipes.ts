@@ -166,7 +166,12 @@ export interface QuietRecipe {
   markInset?: boolean;
 }
 
-export type Recipe = PosterRecipe | QuietRecipe;
+export interface JamRecipe {
+  kind: 'jam';
+  id: string;
+}
+
+export type Recipe = PosterRecipe | QuietRecipe | JamRecipe;
 
 const feedBox = { left: 60, right: 60, top: 64, bottom: 64 };
 
@@ -731,6 +736,10 @@ export const RECIPES: Record<string, Recipe> = {
       },
     ],
     measurementRows: true,
+  },
+  'jam-generic': {
+    kind: 'jam',
+    id: 'jam-generic',
   },
 };
 

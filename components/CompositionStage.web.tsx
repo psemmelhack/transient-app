@@ -15,6 +15,7 @@ import type {
   FitStackNode,
   FooterNode,
   HeaderSplitNode,
+  JamNode,
   KickerNode,
   MarkNode,
   PlaceholderNode,
@@ -127,6 +128,7 @@ function nodeKey(node: SceneNode, index: number): string {
   if (node.kind === 'fit-stack') return `fit-${node.lines.join('|')}-${node.font.family}-${node.top}`;
   if (node.kind === 'footer') return `foot-${node.metaLines.join('|')}-${node.message?.text ?? ''}-${node.extraLines.join('|')}`;
   if (node.kind === 'quiet') return `quiet-${index}-${node.blocks.length}`;
+  if (node.kind === 'jam') return `jam-${node.columns}x${node.rows}-${node.font.family}-${node.fontSize}`;
   return `${node.kind}-${index}`;
 }
 
@@ -144,11 +146,141 @@ function NodeView({ node }: { node: SceneNode }) {
       return <Kicker node={node} />;
     case 'header-split':
       return <HeaderSplit node={node} />;
+    case 'jam':
+      return <Jam node={node} />;
     case 'placeholder':
       return <Placeholder node={node} />;
     default:
       return null;
   }
+}
+
+function measureJam(root: HTMLElement): { x: number; y: number } | null {
+  const probe = root.querySelector('[data-jam-probe]');
+  const cell = root.querySelector('[data-jam-cell]');
+  if (!(probe instanceof HTMLElement) || !(cell instanceof HTMLElement)) return null;
+  const advance = probe.getBoundingClientRect();
+  const box = cell.getBoundingClientRect();
+  if (!(advance.width > 0) || !(advance.height > 0) || !(box.width > 0) || !(box.height > 0)) return null;
+  return { x: box.width / advance.width, y: box.height / advance.height };
+}
+
+function Jam({ node }: { node: JamNode }) {
+  const rootRef = useRef<HTMLDivElement>(null);
+  const face = fontCss(node.font);
+  const key = `${node.columns}x${node.rows}:${node.fontSize}:${node.font.family}:${node.font.weight}:${node.font.style}`;
+  const guess = { x: node.aspect > 0 ? node.aspect / 0.6 : 1, y: 1 };
+  const [held, setHeld] = useState({ key, scale: guess });
+  const scale = held.key === key ? held.scale : guess;
+  const glyphs = Array.from(node.glyphs);
+
+  useLayoutEffect(() => {
+    const root = rootRef.current;
+    if (!root) return;
+    let closed = false;
+    let first = 0;
+    let second = 0;
+    const close = () => {
+      if (closed) return;
+      closed = true;
+      endFit();
+    };
+    beginFit();
+    const hold = () => {
+      const next = measureJam(root);
+      if (!next || closed) return;
+      setHeld((current) => {
+        if (
+          current.key === key &&
+          Math.abs(current.scale.x - next.x) < 0.001 &&
+          Math.abs(current.scale.y - next.y) < 0.001
+        ) {
+          return current;
+        }
+        return { key, scale: next };
+      });
+    };
+    void ensureFonts([cssFontShorthand(node.font, node.fontSize)])
+      .catch(() => undefined)
+      .then(() => {
+        if (closed) return;
+        hold();
+        first = requestAnimationFrame(() => {
+          if (closed) return;
+          hold();
+          second = requestAnimationFrame(() => close());
+        });
+      });
+    return () => {
+      cancelAnimationFrame(first);
+      cancelAnimationFrame(second);
+      close();
+    };
+    // The face and the cell size are in `key`. A new font object with the same values
+    // should not measure again.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key]);
+
+  return (
+    <div
+      ref={rootRef}
+      data-role="jam"
+      style={{
+        position: 'absolute',
+        inset: 0,
+        display: 'grid',
+        gridTemplateColumns: `repeat(${node.columns}, minmax(0, 1fr))`,
+        gridTemplateRows: `repeat(${node.rows}, minmax(0, 1fr))`,
+        overflow: 'hidden',
+        color: node.color,
+        ...face,
+      }}
+    >
+      <span
+        data-jam-probe=""
+        aria-hidden="true"
+        style={{
+          position: 'absolute',
+          left: 0,
+          top: 0,
+          visibility: 'hidden',
+          pointerEvents: 'none',
+          fontSize: node.fontSize,
+          lineHeight: 1,
+        }}
+      >
+        0
+      </span>
+      {glyphs.map((glyph, index) => (
+        <span
+          key={index}
+          data-jam-cell={index === 0 ? '' : undefined}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            minWidth: 0,
+            minHeight: 0,
+            overflow: 'hidden',
+            fontSize: node.fontSize,
+            lineHeight: 1,
+          }}
+        >
+          <span
+            data-jam-glyph=""
+            style={{
+              display: 'block',
+              lineHeight: 1,
+              transform: `scale(${scale.x}, ${scale.y})`,
+              transformOrigin: 'center center',
+            }}
+          >
+            {glyph}
+          </span>
+        </span>
+      ))}
+    </div>
+  );
 }
 
 interface RowFit {
