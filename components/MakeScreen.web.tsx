@@ -4,7 +4,7 @@ import { shellIconButton, shellIconRow } from '../src/ui/shellChrome';
 import { toggleDiagnostic } from '../src/composition/fitReport';
 import { flushSync } from 'react-dom';
 import { jpegBase64ToBlob, preparePosterPhoto, type PosterPhoto } from '../src/composition/posterPhoto';
-import { tonePosterPhoto } from '../src/composition/duotone';
+import { ensureDuotonePixels, paintDuotoneCanvas, selectDisplayedPhoto, tonePosterPhoto, type HeldTone } from '../src/composition/duotone';
 import { buildScene } from '../src/composition/scene';
 import { captureStage } from '../src/export/capture';
 import { captureFileName, downloadBlob } from '../src/export/download';
@@ -44,7 +44,9 @@ export function MakeScreen({ onMap, fixture = false }: { onMap: () => void; fixt
   const telemetry = useTelemetry(telemetryOn || extendedOn);
   const [note, setNote] = useState('');
   const [photo, setPhoto] = useState<PosterPhoto | null>(null);
-  const [toned, setToned] = useState<{ jpeg: string; level: number; tone: string; text: string; photo: PosterPhoto } | null>(null);
+  const [toned, setToned] = useState<HeldTone | null>(null);
+  const [cover, setCover] = useState(false);
+  const [liveLum, setLiveLum] = useState<number | null>(null);
   const [photoNote, setPhotoNote] = useState<string | null>(null);
   const [sharedWith, setSharedWith] = useState('');
   const [lock, setLock] = useState<Moment | null>(null);
@@ -84,6 +86,9 @@ export function MakeScreen({ onMap, fixture = false }: { onMap: () => void; fixt
     photoGeneration.current += 1;
     setPhoto(next);
     setPhotoNote(null);
+    setToned(null);
+    setCover(false);
+    setLiveLum(null);
     if (!next && photoRef.current) photoRef.current.value = '';
     photoWrites.current = photoWrites.current.then(async () => {
       try {
@@ -96,35 +101,79 @@ export function MakeScreen({ onMap, fixture = false }: { onMap: () => void; fixt
     });
   }
 
-  const cardPhoto =
-    photo &&
-    style.photoTone > 0 &&
-    toned &&
+  const settled =
+    photo != null &&
+    toned != null &&
     toned.jpeg === photo.jpeg &&
     toned.level === style.photoTone &&
     toned.tone === style.backgroundColor &&
-    toned.text === style.textColor
-      ? toned.photo
-      : photo;
+    toned.text === style.textColor;
+  const held = selectDisplayedPhoto(photo, style.photoTone, toned);
+  const cardPhoto = held && liveLum != null && !settled && style.photoTone > 0 ? { jpeg: held.jpeg, luminance: liveLum } : held;
 
   useEffect(() => {
-    if (!photo || style.photoTone <= 0) return;
+    if (!photo) return;
+    void ensureDuotonePixels(photo.jpeg);
+  }, [photo]);
+
+  useEffect(() => {
+    if (!photo) return;
     let cancel = false;
-    const jpeg = photo.jpeg;
-    const level = style.photoTone;
     const tone = style.backgroundColor;
     const text = style.textColor;
-    tonePosterPhoto(photo, tone, text, level)
-      .then((next) => {
-        if (!cancel) setToned({ jpeg, level, tone, text, photo: next });
-      })
-      .catch(() => {
-        if (!cancel) setToned(null);
+    const level = style.photoTone;
+    const paint = () => {
+      const canvas = stageRef.current?.querySelector('[data-role="poster-live"]');
+      if (!(canvas instanceof HTMLCanvasElement)) return null;
+      return paintDuotoneCanvas(canvas, photo, tone, text, level);
+    };
+    const lum = paint();
+    if (lum != null) {
+      setCover(true);
+      setLiveLum(lum);
+    } else {
+      void ensureDuotonePixels(photo.jpeg).then(() => {
+        if (cancel) return;
+        const ready = paint();
+        if (ready == null) return;
+        setCover(true);
+        setLiveLum(ready);
       });
+    }
+    const timer = window.setTimeout(() => {
+      if (cancel || level <= 0) return;
+      void tonePosterPhoto(photo, tone, text, level)
+        .then((next) => {
+          if (!cancel) setToned({ jpeg: photo.jpeg, level, tone, text, photo: next });
+        })
+        .catch(() => {
+          if (!cancel) setCover(false);
+        });
+    }, lum == null ? 0 : 80);
     return () => {
       cancel = true;
+      window.clearTimeout(timer);
     };
   }, [photo, style.photoTone, style.backgroundColor, style.textColor]);
+
+  useEffect(() => {
+    const stage = stageRef.current;
+    if (!stage || !photo) return;
+    const wanted = style.photoTone <= 0 ? photo.jpeg : settled && toned ? toned.photo.jpeg : null;
+    if (!wanted) return;
+    const img = stage.querySelector('[data-role="poster-photo"]');
+    if (!(img instanceof HTMLImageElement)) return;
+    let cancel = false;
+    const hide = () => {
+      if (!cancel && img.src === wanted && img.complete && img.naturalWidth > 0) setCover(false);
+    };
+    if (img.complete && img.naturalWidth > 0 && img.src === wanted) hide();
+    else img.addEventListener('load', hide, { once: true });
+    return () => {
+      cancel = true;
+      img.removeEventListener('load', hide);
+    };
+  }, [photo, settled, toned, style.photoTone]);
 
   function onPosterTap() {
     const next = noteTripleTap(taps.current, Date.now());
@@ -268,6 +317,23 @@ export function MakeScreen({ onMap, fixture = false }: { onMap: () => void; fixt
     window.setTimeout(() => setDimmed(false), 60);
   }
 
+  function previewLook(next: Style) {
+    const affectsTone =
+      photo != null &&
+      (next.photoTone !== style.photoTone || next.backgroundColor !== style.backgroundColor || next.textColor !== style.textColor);
+    if (affectsTone && photo && (next.photoTone > 0 || style.photoTone > 0)) {
+      const canvas = stageRef.current?.querySelector('[data-role="poster-live"]');
+      if (canvas instanceof HTMLCanvasElement) {
+        const lum = paintDuotoneCanvas(canvas, photo, next.backgroundColor, next.textColor, next.photoTone);
+        if (lum != null) {
+          setCover(true);
+          setLiveLum(lum);
+        }
+      }
+    }
+    update(next);
+  }
+
   async function renderPng(frozen: Moment): Promise<{ png: Blob; scene: Scene; style: Style }> {
     const placed = withMadePlace(style, frozen.latitude, frozen.longitude);
     const card =
@@ -276,6 +342,7 @@ export function MakeScreen({ onMap, fixture = false }: { onMap: () => void; fixt
         : photo;
     flushSync(() => {
       setLock(frozen);
+      setCover(true);
       if (photo && card && placed.photoTone > 0) {
         setToned({
           jpeg: photo.jpeg,
@@ -288,6 +355,23 @@ export function MakeScreen({ onMap, fixture = false }: { onMap: () => void; fixt
     });
     const stage = stageRef.current;
     if (!stage) throw new Error('The composition is not ready');
+    if (photo && card) {
+      const canvas = stage.querySelector('[data-role="poster-live"]');
+      if (canvas instanceof HTMLCanvasElement) {
+        paintDuotoneCanvas(canvas, photo, placed.backgroundColor, placed.textColor, placed.photoTone);
+      }
+    }
+    const wanted = card?.jpeg ?? '';
+    const img = stage.querySelector('[data-role="poster-photo"]');
+    if (img instanceof HTMLImageElement && wanted && !(img.complete && img.naturalWidth > 0 && img.src === wanted)) {
+      await new Promise<void>((resolve) => {
+        const done = () => resolve();
+        img.addEventListener('load', done, { once: true });
+        img.addEventListener('error', done, { once: true });
+        window.setTimeout(done, 4000);
+      });
+    }
+    flushSync(() => setCover(false));
     const sceneNow = buildScene(placed, frozen, note, frozen.at, card);
     const raw = await captureStage(stage, sceneNow);
     let png = raw;
@@ -411,6 +495,7 @@ export function MakeScreen({ onMap, fixture = false }: { onMap: () => void; fixt
             >
               <CompositionStage
                 scene={scene}
+                photoLive={cover}
                 ref={(node: unknown) => {
                   stageRef.current = node instanceof HTMLElement ? node : null;
                 }}
@@ -472,7 +557,7 @@ export function MakeScreen({ onMap, fixture = false }: { onMap: () => void; fixt
           />
           <Parameters
             style={style}
-            onChange={update}
+            onChange={previewLook}
             photo={photo}
             onPickPhoto={onPickPhoto}
             onClearPhoto={() => applyPhoto(null)}
