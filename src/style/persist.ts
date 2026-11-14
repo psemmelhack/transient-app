@@ -67,7 +67,13 @@ export function sanitizeStyle(input: unknown): Style {
         : seedForCell(isMadeCell(raw.madeCell) ? raw.madeCell : null, madeVariantOf(raw.madeVariant)),
     measurements,
     temperatureUnit: isUnit(raw.temperatureUnit) ? raw.temperatureUnit : 'F',
+    photoTone: toneOf(raw.photoTone),
   };
+}
+
+function toneOf(value: unknown): number {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return 0;
+  return Math.round(Math.min(1, Math.max(0, value)) * 100) / 100;
 }
 
 export function hasSavedStyle(): boolean {

@@ -82,12 +82,28 @@ export function withTextColor(style: Style, hex: string): Style {
   });
 }
 
-export function withBackground(style: Style, hex: string): Style {
+export function withBackground(style: Style, hex: string, engageTone = false): Style {
   if (!isHex(hex)) return style;
-  return leavePreset(style, {
+  const next = leavePreset(style, {
     backgroundColor: normalizeHex(hex),
     backgroundMode: 'manual',
   });
+  if (engageTone && next.photoTone <= 0) return { ...next, photoTone: 1 };
+  return next;
+}
+
+/** How strongly the photo is mapped into the background color. */
+export function withPhotoTone(style: Style, level: number): Style {
+  if (!Number.isFinite(level)) return style;
+  const photoTone = Math.round(Math.min(1, Math.max(0, level)) * 100) / 100;
+  if (photoTone === style.photoTone) return style;
+  return leavePreset(style, { photoTone });
+}
+
+/** Drop the duotone without leaving the current preset. */
+export function withoutPhotoTone(style: Style): Style {
+  if (style.photoTone === 0) return style;
+  return { ...style, photoTone: 0 };
 }
 
 export function withAutoBackground(style: Style): Style {

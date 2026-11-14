@@ -173,6 +173,7 @@ export function styleFromPreset(preset: Preset, previous?: Style): Style {
     madeSeed: previous?.madeSeed ?? DEFAULT_MADE_SEED,
     measurements: previous?.measurements ?? defaultMeasurements(),
     temperatureUnit: previous?.temperatureUnit ?? 'F',
+    photoTone: previous?.photoTone ?? 0,
   };
 }
 

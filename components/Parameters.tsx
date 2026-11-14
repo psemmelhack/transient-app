@@ -20,6 +20,7 @@ import {
   withManualBackground,
   withMeasurement,
   withMonoFont,
+  withPhotoTone,
   withPreset,
   withTemperatureUnit,
   withTextColor,
@@ -81,6 +82,7 @@ export function Parameters({
     });
   }
 
+  const engageTone = Boolean(photo);
   return (
     <div style={parametersStyle}>
       <Section label="Presets">
@@ -119,7 +121,14 @@ export function Parameters({
       </Section>
 
       <Section label="Camera">
-        <PhotoControl photo={photo} onPickPhoto={onPickPhoto} onClearPhoto={onClearPhoto} photoNote={photoNote} />
+        <PhotoControl
+          photo={photo}
+          style={style}
+          onChange={onChange}
+          onPickPhoto={onPickPhoto}
+          onClearPhoto={onClearPhoto}
+          photoNote={photoNote}
+        />
       </Section>
 
       <Section label="Layout">
@@ -243,8 +252,8 @@ export function Parameters({
           </button>
           <span style={{ fontFamily: ui, fontWeight: 400, fontSize: 12, letterSpacing: '0.04em', color: muted }}>{formatContrast(contrastRatio(style.textColor, style.backgroundColor))}</span>
         </div>
-        <Swatches value={style.backgroundColor} onPick={(hex) => onChange(withBackground(style, hex))} />
-        <HexField label="Background color hex" value={style.backgroundColor} onCommit={(hex) => onChange(withBackground(style, hex))} />
+        <Swatches value={style.backgroundColor} onPick={(hex) => onChange(withBackground(style, hex, engageTone))} />
+        <HexField label="Background color hex" value={style.backgroundColor} onCommit={(hex) => onChange(withBackground(style, hex, engageTone))} />
       </Section>
 
       <Section label="Data">
@@ -299,15 +308,20 @@ export function Parameters({
 
 function PhotoControl({
   photo,
+  style,
+  onChange,
   onPickPhoto,
   onClearPhoto,
   photoNote,
 }: {
   photo: PosterPhoto | null;
+  style: Style;
+  onChange: (style: Style) => void;
   onPickPhoto?: () => void;
   onClearPhoto?: () => void;
   photoNote?: string | null;
 }) {
+  const level = Math.round(style.photoTone * 100);
   return (
     <>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -324,10 +338,69 @@ function PhotoControl({
           </>
         ) : null}
       </div>
+      {photo ? (
+        <div style={{ marginTop: 14 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 2 }}>
+            <div style={{ ...minorLabel, margin: 0 }}>Tone</div>
+            <span style={{ fontFamily: ui, fontWeight: 500, fontSize: 12, letterSpacing: '0.06em', color: ink }}>{level}</span>
+          </div>
+          <ToneSlider level={style.photoTone} onChange={(next) => onChange(withPhotoTone(style, next))} />
+        </div>
+      ) : null}
       {photoNote ? (
         <p style={{ fontFamily: ui, fontWeight: 400, fontSize: 12, lineHeight: 1.45, color: muted, margin: '8px 0 0' }}>{photoNote}</p>
       ) : null}
     </>
+  );
+}
+
+function ToneSlider({ level, onChange }: { level: number; onChange: (level: number) => void }) {
+  const trackRef = useRef<HTMLDivElement>(null);
+  const amount = Math.min(1, Math.max(0, level));
+  function setFromClient(clientX: number) {
+    const rect = trackRef.current?.getBoundingClientRect();
+    if (!rect || rect.width <= 18) return;
+    const next = Math.round(Math.min(1, Math.max(0, (clientX - rect.left - 9) / (rect.width - 18))) * 100) / 100;
+    onChange(next);
+  }
+  return (
+    <div
+      ref={trackRef}
+      role="slider"
+      tabIndex={0}
+      aria-label="Duotone level"
+      aria-valuemin={0}
+      aria-valuemax={100}
+      aria-valuenow={Math.round(amount * 100)}
+      onPointerDown={(event) => {
+        event.currentTarget.setPointerCapture(event.pointerId);
+        setFromClient(event.clientX);
+      }}
+      onPointerMove={(event) => {
+        if (!event.currentTarget.hasPointerCapture(event.pointerId)) return;
+        setFromClient(event.clientX);
+      }}
+      onKeyDown={(event) => {
+        if (event.key === 'ArrowRight' || event.key === 'ArrowUp') onChange(Math.min(1, Math.round((amount + 0.05) * 100) / 100));
+        if (event.key === 'ArrowLeft' || event.key === 'ArrowDown') onChange(Math.max(0, Math.round((amount - 0.05) * 100) / 100));
+      }}
+      style={{ position: 'relative', height: 44, touchAction: 'none', cursor: 'pointer' }}
+    >
+      <div style={{ position: 'absolute', left: 9, right: 9, top: 21, height: 2, background: ink }} />
+      <div
+        style={{
+          position: 'absolute',
+          top: 13,
+          left: `calc(9px + (100% - 18px) * ${amount})`,
+          width: 18,
+          height: 18,
+          boxSizing: 'border-box',
+          borderRadius: 999,
+          background: ink,
+          border: `2px solid ${paper}`,
+        }}
+      />
+    </div>
   );
 }
 

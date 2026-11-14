@@ -63,5 +63,6 @@ export function randomStyle(current: Style, rng: () => number = Math.random): St
     madeCell: current.madeCell,
     madeVariant: current.madeVariant,
     madeSeed: current.madeSeed,
+    photoTone: current.photoTone,
   };
 }
