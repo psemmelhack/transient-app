@@ -98,6 +98,14 @@ describe('saved style', () => {
     expect(loaded.backgroundMode).toBe('auto');
     expect(loaded.displayFontId).toBe(defaultStyle().displayFontId);
     expect(loaded.format).toBe('square');
+    expect(loaded.photoTone).toBe(0);
+  });
+
+  it('keeps a duotone level on the saved style and drops a bad one', () => {
+    const saved = { ...defaultStyle(), photoTone: 0.45 };
+    expect(sanitizeStyle(saved).photoTone).toBe(0.45);
+    expect(sanitizeStyle({ ...saved, photoTone: 4 }).photoTone).toBe(1);
+    expect(sanitizeStyle({ ...saved, photoTone: Number.NaN }).photoTone).toBe(0);
   });
 
   it('overrides a stored Story or Feed ratio and keeps every other field', () => {

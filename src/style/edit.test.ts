@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { complementaryBackground } from '../color/complement';
 import { contrastRatio } from '../color/contrast';
 import { formatChoiceEnabled } from '../composition/formats';
-import { withAutoBackground, withBackground, withFormat, withLayout, withManualBackground, withMeasurement, withPreset, withTextColor } from './edit';
+import { withAutoBackground, withBackground, withFormat, withLayout, withManualBackground, withMeasurement, withPhotoTone, withPreset, withTextColor } from './edit';
 import { defaultStyle, presetById } from './presets';
 
 describe('style edits', () => {
@@ -86,5 +86,19 @@ describe('style edits', () => {
       expect(next).toEqual(current);
       expect(next.format).toBe('square');
     }
+  });
+
+  it('engages a full duotone when a background is chosen, and keeps a level the user already set', () => {
+    const current = defaultStyle();
+    expect(current.photoTone).toBe(0);
+    const engaged = withBackground(current, '#1E3A2D', true);
+    expect(engaged.backgroundColor).toBe('#1E3A2D');
+    expect(engaged.photoTone).toBe(1);
+    expect(engaged.presetId).toBeNull();
+    const held = withBackground({ ...engaged, photoTone: 0.4 }, '#D2231C', true);
+    expect(held.photoTone).toBe(0.4);
+    expect(held.backgroundColor).toBe('#D2231C');
+    expect(withPhotoTone(held, 0).photoTone).toBe(0);
+    expect(withBackground(current, '#1E3A2D').photoTone).toBe(0);
   });
 });

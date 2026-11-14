@@ -4,6 +4,7 @@ import { shellIconButton, shellIconRow } from '../src/ui/shellChrome';
 import { toggleDiagnostic } from '../src/composition/fitReport';
 import { flushSync } from 'react-dom';
 import { jpegBase64ToBlob, preparePosterPhoto, type PosterPhoto } from '../src/composition/posterPhoto';
+import { tonePosterPhoto } from '../src/composition/duotone';
 import { buildScene } from '../src/composition/scene';
 import { captureStage } from '../src/export/capture';
 import { captureFileName, downloadBlob } from '../src/export/download';
@@ -43,6 +44,7 @@ export function MakeScreen({ onMap, fixture = false }: { onMap: () => void; fixt
   const telemetry = useTelemetry(telemetryOn || extendedOn);
   const [note, setNote] = useState('');
   const [photo, setPhoto] = useState<PosterPhoto | null>(null);
+  const [toned, setToned] = useState<{ jpeg: string; level: number; tone: string; text: string; photo: PosterPhoto } | null>(null);
   const [photoNote, setPhotoNote] = useState<string | null>(null);
   const [sharedWith, setSharedWith] = useState('');
   const [lock, setLock] = useState<Moment | null>(null);
@@ -94,6 +96,36 @@ export function MakeScreen({ onMap, fixture = false }: { onMap: () => void; fixt
     });
   }
 
+  const cardPhoto =
+    photo &&
+    style.photoTone > 0 &&
+    toned &&
+    toned.jpeg === photo.jpeg &&
+    toned.level === style.photoTone &&
+    toned.tone === style.backgroundColor &&
+    toned.text === style.textColor
+      ? toned.photo
+      : photo;
+
+  useEffect(() => {
+    if (!photo || style.photoTone <= 0) return;
+    let cancel = false;
+    const jpeg = photo.jpeg;
+    const level = style.photoTone;
+    const tone = style.backgroundColor;
+    const text = style.textColor;
+    tonePosterPhoto(photo, tone, text, level)
+      .then((next) => {
+        if (!cancel) setToned({ jpeg, level, tone, text, photo: next });
+      })
+      .catch(() => {
+        if (!cancel) setToned(null);
+      });
+    return () => {
+      cancel = true;
+    };
+  }, [photo, style.photoTone, style.backgroundColor, style.textColor]);
+
   function onPosterTap() {
     const next = noteTripleTap(taps.current, Date.now());
     taps.current = next.stamps;
@@ -106,7 +138,7 @@ export function MakeScreen({ onMap, fixture = false }: { onMap: () => void; fixt
     const live = telemetryOn || extendedOn;
     return applyTelemetry(base, live ? telemetry.sensors : null, live ? telemetry.location : null);
   }, [extendedOn, lock, moment, telemetry.sensors, telemetry.location, telemetryOn]);
-  const scene = useMemo(() => buildScene(style, shown, note, shown?.at ?? now, photo), [style, shown, note, now, photo]);
+  const scene = useMemo(() => buildScene(style, shown, note, shown?.at ?? now, cardPhoto), [style, shown, note, now, cardPhoto]);
 
   useEffect(() => {
     if (!shown) return;
@@ -237,11 +269,26 @@ export function MakeScreen({ onMap, fixture = false }: { onMap: () => void; fixt
   }
 
   async function renderPng(frozen: Moment): Promise<{ png: Blob; scene: Scene; style: Style }> {
-    flushSync(() => setLock(frozen));
+    const placed = withMadePlace(style, frozen.latitude, frozen.longitude);
+    const card =
+      photo && placed.photoTone > 0
+        ? await tonePosterPhoto(photo, placed.backgroundColor, placed.textColor, placed.photoTone)
+        : photo;
+    flushSync(() => {
+      setLock(frozen);
+      if (photo && card && placed.photoTone > 0) {
+        setToned({
+          jpeg: photo.jpeg,
+          level: placed.photoTone,
+          tone: placed.backgroundColor,
+          text: placed.textColor,
+          photo: card,
+        });
+      }
+    });
     const stage = stageRef.current;
     if (!stage) throw new Error('The composition is not ready');
-    const placed = withMadePlace(style, frozen.latitude, frozen.longitude);
-    const sceneNow = buildScene(placed, frozen, note, frozen.at, photo);
+    const sceneNow = buildScene(placed, frozen, note, frozen.at, card);
     const raw = await captureStage(stage, sceneNow);
     let png = raw;
     try {

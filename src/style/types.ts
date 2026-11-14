@@ -29,4 +29,9 @@ export interface Style {
   madeSeed: number;
   measurements: Record<string, boolean>;
   temperatureUnit: TempUnit;
+  /**
+   * How far a photo is mapped into the background color.
+   * 0 is the original photograph. 1 is the full duotone.
+   */
+  photoTone: number;
 }
