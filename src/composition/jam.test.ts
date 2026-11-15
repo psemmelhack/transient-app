@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { exampleMoment, EXAMPLE_INSTANT } from '../data/moment';
 import { withLayout, withMeasurement } from '../style/edit';
 import { defaultStyle } from '../style/presets';
-import { jamFields, layoutJam, wrapJam } from './jam';
+import { capBand, capShift, crushText, jamFields, layoutCrush, layoutJam, wrapJam } from './jam';
 
 const moment = exampleMoment(EXAMPLE_INSTANT);
 
@@ -65,6 +65,54 @@ describe('jam wrap', () => {
       cursor = line.end;
     }
     expect(cursor).toBe(advances.length);
+  });
+});
+
+describe('crush packing', () => {
+  it('makes the cap height the row and tiles the square', () => {
+    const layout = layoutCrush([0.5, 0.5, 0.5, 0.5], 100, 100, 0.5);
+    expect(layout.lines).toHaveLength(2);
+    expect(layout.fontSize * 0.5).toBeCloseTo(layout.lineHeight, 4);
+    expect(layout.lineHeight * layout.lines.length).toBeCloseTo(100, 4);
+    expect(layout.lines.map((line) => [line.start, line.end])).toEqual([
+      [0, 2],
+      [2, 4],
+    ]);
+    for (const line of layout.lines) {
+      const used = 0.5 * (line.end - line.start) * layout.fontSize;
+      expect(used + line.gap * (line.end - line.start - 1)).toBeCloseTo(100, 3);
+    }
+  });
+
+  it('grows by using fewer rows when there is less data', () => {
+    const short = layoutCrush([0.4, 0.4], 200, 200, 0.8);
+    const long = layoutCrush(Array.from({ length: 40 }, () => 0.4), 200, 200, 0.8);
+    expect(short.fontSize).toBeGreaterThan(long.fontSize);
+    expect(short.lineHeight * short.lines.length).toBeCloseTo(200, 4);
+    expect(long.lineHeight * long.lines.length).toBeCloseTo(200, 4);
+    expect(long.lines[long.lines.length - 1]?.end).toBe(40);
+  });
+
+  it('uppercases the same fields once', () => {
+    const style = withLayout(defaultStyle(), 'crush');
+    const text = crushText(style, moment, 'Here now');
+    expect(text).toBe(jamFields(style, moment, 'Here now').join('').toLocaleUpperCase('en-US'));
+    expect(text).toContain('HERE NOW'.replace(/\s/g, ''));
+    expect(text).toContain('REDONDOBEACH,CALIFORNIA');
+    expect(text.split('HERE').length - 1).toBe(1);
+  });
+
+  it('tucks a comma into the cap band and leaves an H on the cap', () => {
+    const band = capBand({ fontSize: 200, capAscent: 172, capDescent: 0, fontAscent: 235, fontDescent: 66 });
+    expect(band.ratio).toBeCloseTo(172 / 200, 5);
+    const letter = capShift(band, { ascent: 172 / 200, descent: 0 }, 200);
+    const comma = capShift(band, { ascent: 30 / 200, descent: 23 / 200 }, 200);
+    const pipe = capShift(band, { ascent: 191 / 200, descent: 8 / 200 }, 200);
+    expect(comma).toBeLessThan(letter);
+    expect(letter + band.top * 200).toBeCloseTo(0, 4);
+    const commaBottom = 172 + 23 + (comma - letter);
+    expect(commaBottom).toBeCloseTo(172, 3);
+    expect(pipe).not.toBe(letter);
   });
 });
 

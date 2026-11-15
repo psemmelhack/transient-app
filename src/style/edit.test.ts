@@ -19,6 +19,10 @@ describe('style edits', () => {
     expect(jam.layout).toBe('jam');
     expect(jam.recipeId).toBe('jam-generic');
     expect(jam.presetId).toBeNull();
+    const crush = withLayout(defaultStyle(), 'crush');
+    expect(crush.layout).toBe('crush');
+    expect(crush.recipeId).toBe('crush-generic');
+    expect(crush.presetId).toBeNull();
   });
 
   it('keeps the background when Auto is off', () => {

@@ -8,7 +8,7 @@ import { FORMATS } from './formats';
 import { getFont, resolveFont, type CssFont, type FontRole } from './fonts';
 import { madeFamily } from './madeFont';
 import { withMadePlace } from '../style/edit';
-import { jamText } from './jam';
+import { crushText, jamText } from './jam';
 import { layoutPosterNote, noteFace, noteFontSize, noteMaxWidth, noteRhythm, NOTE_LEADING, wrappedLineCount } from './note';
 import { getRecipe, type PosterRecipe, type QuietBlockSpec, type QuietRecipe } from './recipes';
 import { clockLabel, coordLines, linesFor, MARK, momentText, renderToken, type CoordLineModel } from './text';
@@ -236,6 +236,8 @@ export interface JamNode {
   color: string;
   width: number;
   height: number;
+  /** `cap` is Crush: uppercase rows whose height is the cap height. `em` is Jam. */
+  pack: 'em' | 'cap';
 }
 
 export interface PlaceholderNode {
@@ -344,16 +346,23 @@ function paintForPhoto(style: Style, look: { textColor: string; footerColor: str
   };
 }
 
+function crushFont(): CssFont {
+  const font = getFont('anton');
+  return { family: font.family, weight: font.weight, style: 'normal' };
+}
+
 function jamNode(style: Style, moment: Moment, message: string): JamNode {
   const format = FORMATS[style.format];
-  const text = jamText(style, moment, message);
+  const crush = style.layout === 'crush';
+  const text = crush ? crushText(style, moment, message) : jamText(style, moment, message);
   return {
     kind: 'jam',
     text: text || '\u00b7',
-    font: fontOf(style, 'display'),
+    font: crush ? crushFont() : fontOf(style, 'display'),
     color: style.textColor,
     width: format.width,
     height: format.height,
+    pack: crush ? 'cap' : 'em',
   };
 }
 
