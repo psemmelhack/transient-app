@@ -741,6 +741,10 @@ export const RECIPES: Record<string, Recipe> = {
     kind: 'jam',
     id: 'jam-generic',
   },
+  'crush-generic': {
+    kind: 'jam',
+    id: 'crush-generic',
+  },
 };
 
 export function getRecipe(id: string): Recipe {

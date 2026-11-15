@@ -106,6 +106,9 @@ describe('saved style', () => {
     expect(loaded.layout).toBe('jam');
     expect(loaded.recipeId).toBe('jam-generic');
     expect(sanitizeStyle({ ...defaultStyle(), layout: 'jam', recipeId: 'missing' }).layout).toBe('jam');
+    const crush = sanitizeStyle({ ...defaultStyle(), layout: 'crush', recipeId: 'crush-generic', presetId: null });
+    expect(crush.layout).toBe('crush');
+    expect(crush.recipeId).toBe('crush-generic');
   });
 
   it('keeps a duotone level on the saved style and drops a bad one', () => {

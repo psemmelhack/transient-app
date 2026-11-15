@@ -14,6 +14,7 @@ export type IconName =
   | 'quiet'
   | 'note'
   | 'jam'
+  | 'crush'
   | 'story'
   | 'feed'
   | 'square'
@@ -120,6 +121,15 @@ export function Icon({
           <Rect x="4.5" y="4.5" width="15" height="15" rx="1.2" {...stroke} />
           <Line x1="4.5" y1="9.5" x2="19.5" y2="9.5" {...stroke} />
           <Line x1="4.5" y1="14.5" x2="19.5" y2="14.5" {...stroke} />
+        </>
+      )}
+      {name === 'crush' && (
+        <>
+          <Rect x="4.5" y="4.5" width="15" height="15" rx="1.2" {...stroke} />
+          <Line x1="6.5" y1="8" x2="17.5" y2="8" {...stroke} />
+          <Line x1="6.5" y1="11" x2="17.5" y2="11" {...stroke} />
+          <Line x1="6.5" y1="14" x2="17.5" y2="14" {...stroke} />
+          <Line x1="6.5" y1="17" x2="17.5" y2="17" {...stroke} />
         </>
       )}
       {name === 'story' && <Rect x="8" y="3.5" width="8" height="17" rx="1.4" {...stroke} />}

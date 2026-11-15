@@ -1,6 +1,6 @@
 import type { FormatId } from '../composition/formats';
 
-export type LayoutMode = 'poster' | 'quiet' | 'note' | 'jam';
+export type LayoutMode = 'poster' | 'quiet' | 'note' | 'jam' | 'crush';
 export type Align = 'left' | 'center' | 'right';
 export type BackgroundMode = 'auto' | 'manual';
 export type TempUnit = 'F' | 'C' | 'both';

@@ -137,6 +137,7 @@ export function Parameters({
           <IconChoice icon="quiet" label="Quiet" pressed={style.layout === 'quiet'} onPress={() => onChange(withLayout(style, 'quiet'))} />
           <IconChoice icon="note" label="Note" pressed={style.layout === 'note'} onPress={() => onChange(withLayout(style, 'note'))} />
           <IconChoice icon="jam" label="Jam" pressed={style.layout === 'jam'} onPress={() => onChange(withLayout(style, 'jam'))} />
+          <IconChoice icon="crush" label="Jam+" pressed={style.layout === 'crush'} onPress={() => onChange(withLayout(style, 'crush'))} />
         </div>
       </Section>
 

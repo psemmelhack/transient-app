@@ -8,7 +8,7 @@ import { replaceFitReport } from '../src/composition/fitReport';
 import { cssFontShorthand, ensureFonts, familyReady, fontsStatus, fontSnapshots } from '../src/composition/fontReady';
 import { heroScaleToClear, scaleClearanceBox } from '../src/composition/heroClearance';
 import { fitSpreadTelemetry } from '../src/composition/telemetryFit';
-import { layoutJam, type JamLayout } from '../src/composition/jam';
+import { capBand, capShift, layoutCrush, layoutJam, type JamLayout } from '../src/composition/jam';
 import { noteRhythm, wrapNote } from '../src/composition/note';
 import { beginFit, endFit } from '../src/composition/fitSession';
 import { isNativeShell } from '../src/native/shell';
@@ -130,7 +130,7 @@ function nodeKey(node: SceneNode, index: number): string {
   if (node.kind === 'fit-stack') return `fit-${node.lines.join('|')}-${node.font.family}-${node.top}`;
   if (node.kind === 'footer') return `foot-${node.metaLines.join('|')}-${node.message?.text ?? ''}-${node.extraLines.join('|')}`;
   if (node.kind === 'quiet') return `quiet-${index}-${node.blocks.length}`;
-  if (node.kind === 'jam') return `jam-${node.font.family}-${node.text.length}-${node.width}x${node.height}`;
+  if (node.kind === 'jam') return `jam-${node.pack}-${node.font.family}-${node.text.length}-${node.width}x${node.height}`;
   return `${node.kind}-${index}`;
 }
 
@@ -159,18 +159,44 @@ function NodeView({ node }: { node: SceneNode }) {
 
 const JAM_PROBE = 100;
 
+function measureCrush(font: CssFont, glyphs: string[], fontSize: number): { ratio: number; shifts: number[] } | null {
+  const canvas = document.createElement('canvas');
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return null;
+  ctx.font = cssFontShorthand(font, JAM_PROBE);
+  const cap = ctx.measureText('H');
+  if (!(cap.actualBoundingBoxAscent > 0) || !(cap.fontBoundingBoxAscent > 0)) return null;
+  const band = capBand({
+    fontSize: JAM_PROBE,
+    capAscent: cap.actualBoundingBoxAscent,
+    capDescent: cap.actualBoundingBoxDescent,
+    fontAscent: cap.fontBoundingBoxAscent,
+    fontDescent: cap.fontBoundingBoxDescent,
+  });
+  const shifts = glyphs.map((glyph) => {
+    const ink = ctx.measureText(glyph);
+    const ascent = ink.actualBoundingBoxAscent > 0 || ink.actualBoundingBoxDescent > 0 ? ink.actualBoundingBoxAscent / JAM_PROBE : band.capAscent;
+    return capShift(band, { ascent, descent: ink.actualBoundingBoxDescent / JAM_PROBE }, fontSize);
+  });
+  return { ratio: band.ratio, shifts };
+}
+
 function Jam({ node }: { node: JamNode }) {
   const rootRef = useRef<HTMLDivElement>(null);
   const face = fontCss(node.font);
   const glyphs = Array.from(node.text);
-  const key = `${node.text}|${node.font.family}|${node.font.weight}|${node.font.style}|${node.font.variation ?? ''}|${node.width}x${node.height}`;
-  const guess = layoutJam(glyphs.map(() => 0.5), node.width, node.height);
-  const [held, setHeld] = useState<{ key: string; layout: JamLayout; advances: number[] }>({
+  const crush = node.pack === 'cap';
+  const key = `${node.pack}|${node.text}|${node.font.family}|${node.font.weight}|${node.font.style}|${node.font.variation ?? ''}|${node.width}x${node.height}`;
+  const guess = crush
+    ? layoutCrush(glyphs.map(() => 0.5), node.width, node.height, 0.7)
+    : layoutJam(glyphs.map(() => 0.5), node.width, node.height);
+  const [held, setHeld] = useState<{ key: string; layout: JamLayout; advances: number[]; shifts: number[] }>({
     key,
     layout: guess,
     advances: glyphs.map(() => 0.5),
+    shifts: [],
   });
-  const ready = held.key === key ? held : { key, layout: guess, advances: glyphs.map(() => 0.5) };
+  const ready = held.key === key ? held : { key, layout: guess, advances: glyphs.map(() => 0.5), shifts: [] };
 
   useLayoutEffect(() => {
     const root = rootRef.current;
@@ -195,15 +221,16 @@ function Jam({ node }: { node: JamNode }) {
           return (width > 0 ? width : 0.01) / size;
         });
       };
-      const commit = (layout: JamLayout, advances: number[]) => {
+      const commit = (layout: JamLayout, advances: number[], shifts: number[]) => {
         flushSync(() => {
           setHeld((current) => {
             const same =
               current.key === key &&
               current.layout.lines.length === layout.lines.length &&
               Math.abs(current.layout.fontSize - layout.fontSize) < 0.05 &&
+              current.shifts.length === shifts.length &&
               current.layout.lines.every((line, index) => line.start === layout.lines[index]?.start && line.end === layout.lines[index]?.end);
-            return same ? current : { key, layout, advances };
+            return same ? current : { key, layout, advances, shifts };
           });
         });
       };
@@ -211,18 +238,26 @@ function Jam({ node }: { node: JamNode }) {
         const rows = [...root.querySelectorAll('[data-jam-line]')].filter((row): row is HTMLElement => row instanceof HTMLElement);
         return rows.reduce((worst, row) => Math.max(worst, row.scrollWidth - row.clientWidth), 0);
       };
+      const pack = (advances: number[]) => {
+        if (!crush) return { layout: layoutJam(advances, node.width, node.height), shifts: [] as number[] };
+        const measured = measureCrush(node.font, glyphs, node.height);
+        const ratio = measured?.ratio ?? 0.7;
+        const layout = layoutCrush(advances, node.width, node.height, ratio);
+        const shifts = measureCrush(node.font, glyphs, layout.fontSize)?.shifts ?? [];
+        return { layout, shifts };
+      };
       let advances = read(JAM_PROBE);
-      let layout = layoutJam(advances, node.width, node.height);
+      let packed = pack(advances);
       for (let pass = 0; pass < 4; pass += 1) {
-        advances = read(layout.fontSize);
-        layout = layoutJam(advances, node.width, node.height);
-        commit(layout, advances);
+        advances = read(packed.layout.fontSize);
+        packed = pack(advances);
+        commit(packed.layout, advances, packed.shifts);
         const extra = overflow();
         if (extra <= 1 || closed) break;
         const factor = (node.width + extra) / node.width;
         advances = advances.map((advance) => advance * factor);
-        layout = layoutJam(advances, node.width, node.height);
-        commit(layout, advances);
+        packed = pack(advances);
+        commit(packed.layout, advances, packed.shifts);
       }
     };
     void ensureFonts([cssFontShorthand(node.font, 160)])
@@ -250,6 +285,7 @@ function Jam({ node }: { node: JamNode }) {
     <div
       ref={rootRef}
       data-role="jam"
+      data-pack={node.pack}
       style={{
         position: 'absolute',
         inset: 0,
@@ -301,26 +337,35 @@ function Jam({ node }: { node: JamNode }) {
               display: 'flex',
               flexDirection: 'row',
               justifyContent: alone ? 'flex-start' : 'space-between',
-              alignItems: 'center',
+              alignItems: crush ? 'flex-start' : 'center',
+              overflow: crush ? 'hidden' : undefined,
               fontSize: ready.layout.fontSize,
               lineHeight: 1,
             }}
           >
-            {chars.map((glyph, index) => (
-              <span
-                key={index}
-                data-jam-glyph=""
-                style={{
-                  display: 'block',
-                  flex: '0 0 auto',
-                  lineHeight: 1,
-                  transform: alone ? `scaleX(${scaleX})` : undefined,
-                  transformOrigin: 'left center',
-                }}
-              >
-                {glyph}
-              </span>
-            ))}
+            {chars.map((glyph, index) => {
+              const shift = crush ? (ready.shifts[line.start + index] ?? 0) : 0;
+              const transform = crush
+                ? `translateY(${shift}px)${alone ? ` scaleX(${scaleX})` : ''}`
+                : alone
+                  ? `scaleX(${scaleX})`
+                  : undefined;
+              return (
+                <span
+                  key={index}
+                  data-jam-glyph=""
+                  style={{
+                    display: 'block',
+                    flex: '0 0 auto',
+                    lineHeight: 1,
+                    transform,
+                    transformOrigin: crush ? 'left top' : 'left center',
+                  }}
+                >
+                  {glyph}
+                </span>
+              );
+            })}
           </div>
         );
       })}

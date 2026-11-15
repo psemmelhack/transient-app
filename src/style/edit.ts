@@ -17,6 +17,7 @@ export function recipeForLayout(layout: LayoutMode): string {
   if (layout === 'poster') return 'poster-generic';
   if (layout === 'quiet') return 'quiet-generic';
   if (layout === 'jam') return 'jam-generic';
+  if (layout === 'crush') return 'crush-generic';
   return 'note-generic';
 }
 

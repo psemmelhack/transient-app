@@ -26,7 +26,7 @@ const TEXT_COLORS = [
   '#F6F1E6',
 ].filter((hex) => contrastRatio(hex, '#FFFFFF') >= MIN_AUTO_CONTRAST || contrastRatio(hex, '#000000') >= MIN_AUTO_CONTRAST);
 
-const LAYOUTS: Style['layout'][] = ['poster', 'quiet', 'note', 'jam'];
+const LAYOUTS: Style['layout'][] = ['poster', 'quiet', 'note', 'jam', 'crush'];
 const ALIGNS: Style['align'][] = ['left', 'center', 'right'];
 
 function pick<T>(items: readonly T[], rng: () => number): T {

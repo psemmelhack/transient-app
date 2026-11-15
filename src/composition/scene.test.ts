@@ -606,6 +606,23 @@ describe('jam layout', () => {
     expect(jam && jam.kind === 'jam' && jam.text.includes('Hi')).toBe(true);
   });
 
+  it('crushes into Anton capitals even when another display face is selected', () => {
+    const style = withDisplayFont(withLayout(defaultStyle(), 'crush'), 'bodoni');
+    const crushed = jamNode(style, 'Hi').jam;
+    expect(crushed.pack).toBe('cap');
+    expect(crushed.font.family).toBe('Anton');
+    expect(crushed.text).toBe(crushed.text.toLocaleUpperCase('en-US'));
+    expect(crushed.text.startsWith('HI')).toBe(true);
+    expect(crushed.text.split('HI').length - 1).toBe(1);
+    const made = { ...withLayout(defaultStyle(), 'crush'), displayFontId: 'made' };
+    const madeJam = jamNode(made, 'Hi').jam;
+    expect(madeJam.font.family).toBe('Anton');
+    expect(madeJam.text).not.toContain('Hi');
+    const jam = jamNode(withLayout(defaultStyle(), 'jam'), 'Hi').jam;
+    expect(jam.pack).toBe('em');
+    expect(jam.text.startsWith('Hi')).toBe(true);
+  });
+
   it('shows speed only above 1 mph and extended values once, without labels', () => {
     const style = withMeasurement(withMeasurement(withLayout(defaultStyle(), 'jam'), 'telemetry', true), 'extended', true);
     const phone = {
