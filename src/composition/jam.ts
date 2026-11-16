@@ -93,53 +93,200 @@ export function wrapJam(advances: number[], size: number, width: number): Wrappe
   return lines;
 }
 
-function fits(advances: number[], size: number, width: number, height: number): boolean {
-  if (!(size > 0)) return false;
-  const lines = wrapJam(advances, size, width);
-  if (lines.length * size > height + 0.05) return false;
-  const shared = advances.length >= 2;
-  for (const line of lines) {
-    if (line.width > width + 0.05) return false;
-    if (shared && line.end - line.start < 2) return false;
+/** A row is tight when justification adds at most this fraction of the width. */
+const TIGHT_SLACK = 0.2;
+
+/**
+ * Breaks that minimize the sum of squared leftover width.
+ * Any character may end a line. A line wider than the card is not used
+ * unless it is a single glyph that cannot be split.
+ */
+export function breakJam(advances: number[], size: number, width: number): WrappedLine[] {
+  const n = advances.length;
+  const limit = Math.max(1, width);
+  const prefix = new Array<number>(n + 1);
+  prefix[0] = 0;
+  for (let index = 0; index < n; index += 1) prefix[index + 1] = prefix[index] + Math.max(0, advances[index] ?? 0);
+  const cost = new Array<number>(n + 1).fill(Number.POSITIVE_INFINITY);
+  const from = new Array<number>(n + 1).fill(-1);
+  cost[0] = 0;
+  for (let end = 1; end <= n; end += 1) {
+    for (let start = end - 1; start >= 0; start -= 1) {
+      const used = (prefix[end] - prefix[start]) * size;
+      const glyphs = end - start;
+      if (glyphs > 1 && used > limit + 1e-4) break;
+      const slack = limit - used;
+      const penalty = slack >= -1e-4 ? slack * slack : limit * limit * 64;
+      const next = cost[start] + penalty;
+      if (!(next < cost[end])) continue;
+      cost[end] = next;
+      from[end] = start;
+      if (used > limit + 1e-4) break;
+    }
   }
-  return lines.length > 0;
+  if (!(cost[n] < Number.POSITIVE_INFINITY)) return wrapJam(advances, size, width);
+  const lines: WrappedLine[] = [];
+  let end = n;
+  while (end > 0) {
+    const start = from[end];
+    if (start < 0 || start >= end) return wrapJam(advances, size, width);
+    lines.push({ start, end, width: (prefix[end] - prefix[start]) * size });
+    end = start;
+  }
+  lines.reverse();
+  return lines;
+}
+
+function rowsWithin(lines: WrappedLine[], size: number, height: number, lineUnit: number): boolean {
+  return lines.length > 0 && lines.length * size * lineUnit <= height + 0.05;
+}
+
+function overflows(lines: WrappedLine[], width: number): boolean {
+  return lines.some((line) => line.width > width + 1e-4);
+}
+
+/** Every row is near the full width, and none is far shorter than the average row. */
+function isTight(lines: WrappedLine[], width: number): boolean {
+  if (lines.length === 0 || overflows(lines, width)) return false;
+  const count = lines[lines.length - 1]?.end ?? 0;
+  const average = count / lines.length;
+  const minCount = Math.max(1, Math.round(average * 0.7));
+  const floor = width * (1 - TIGHT_SLACK) - Math.max(0.05, width * 0.001);
+  for (const line of lines) {
+    if (line.end - line.start < minCount) return false;
+    if (line.width < floor) return false;
+  }
+  return true;
+}
+
+interface Packed {
+  size: number;
+  lines: WrappedLine[];
+}
+
+function evaluate(advances: number[], size: number, width: number, height: number, lineUnit: number): { lines: WrappedLine[]; tight: boolean; fit: boolean } | null {
+  if (!(size > 0)) return null;
+  const lines = breakJam(advances, size, width);
+  if (lines.length === 0 || lines[lines.length - 1]?.end !== advances.length) return null;
+  if (!rowsWithin(lines, size, height, lineUnit)) return null;
+  const fit = !overflows(lines, width);
+  return { lines, tight: fit && isTight(lines, width), fit };
+}
+
+function deduped(sizes: number[]): number[] {
+  const seen = new Set<number>();
+  const out: number[] = [];
+  for (const size of sizes) {
+    if (!(size > 0)) continue;
+    const key = Math.round(size * 1000);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(size);
+  }
+  out.sort((a, b) => b - a);
+  return out;
 }
 
 /**
- * Largest type size whose greedy lines still fit the square.
- * Rows then split the height evenly, and each line's spare width becomes
- * the gap between its glyphs. A short string therefore sets larger type.
+ * Sizes worth scoring. The scan is coarse, and each scan size also nominates
+ * the size that would bring its fullest row exactly to the card width, so a
+ * narrow band of tight sizes is not skipped.
+ */
+function candidateSizes(advances: number[], width: number, maxSize: number): number[] {
+  const total = advances.reduce((sum, advance) => sum + Math.max(0, advance), 0) || 1;
+  const floor = Math.min(maxSize, Math.max(1, (width * 0.75) / total));
+  const sizes: number[] = [];
+  let cursor = maxSize;
+  for (let step = 0; step < 180 && cursor >= floor * 0.97; step += 1) {
+    sizes.push(cursor);
+    const lines = breakJam(advances, cursor, width);
+    let fullest = 0;
+    let thinnest = Number.POSITIVE_INFINITY;
+    let fullLine: WrappedLine | null = null;
+    let thinLine: WrappedLine | null = null;
+    for (const line of lines) {
+      if (line.width > fullest) {
+        fullest = line.width;
+        fullLine = line;
+      }
+      if (line.width < thinnest) {
+        thinnest = line.width;
+        thinLine = line;
+      }
+    }
+    const nominate = (line: WrappedLine | null) => {
+      if (!line || !(cursor > 0)) return;
+      const base = line.width / cursor;
+      if (base > 0 && line.width < width - 0.25) sizes.push(Math.min(maxSize, width / base));
+      const next = advances[line.end];
+      if (line.end < advances.length && next > 0) sizes.push(Math.min(maxSize, width / (base + next)));
+    };
+    nominate(fullLine);
+    if (thinLine !== fullLine) nominate(thinLine);
+    cursor *= 0.97;
+  }
+  return deduped(sizes);
+}
+
+/**
+ * Largest size whose balanced rows stay near the full width.
+ * Rows keep their natural height and sit at the top, so a square that
+ * cannot be filled without sparse rows keeps empty space at the bottom.
+ */
+function chooseSize(advances: number[], width: number, height: number, lineUnit: number): Packed {
+  const maxSize = height / lineUnit;
+  const sizes = candidateSizes(advances, width, maxSize);
+  let bestTight: Packed | null = null;
+  let bestFit: Packed | null = null;
+  let ceiling = maxSize;
+  for (const size of sizes) {
+    const result = evaluate(advances, size, width, height, lineUnit);
+    if (result?.fit && (!bestFit || size > bestFit.size)) bestFit = { size, lines: result.lines };
+    if (!result?.tight) {
+      if (!bestTight && size < ceiling) ceiling = size;
+      continue;
+    }
+    bestTight = { size, lines: result.lines };
+    let lo = size;
+    let hi = Math.max(size, ceiling);
+    for (let refine = 0; refine < 14; refine += 1) {
+      const mid = (lo + hi) / 2;
+      const finer = evaluate(advances, mid, width, height, lineUnit);
+      if (finer?.tight) {
+        lo = mid;
+        bestTight = { size: mid, lines: finer.lines };
+      } else {
+        hi = mid;
+      }
+    }
+    break;
+  }
+  if (bestTight) return bestTight;
+  if (bestFit) return bestFit;
+  const lines = breakJam(advances, Math.min(maxSize, width), width);
+  return { size: Math.min(maxSize, width), lines };
+}
+
+function pack(advances: number[], width: number, height: number, lineUnit: number): JamLayout {
+  const cardW = width > 0 ? width : 1;
+  const cardH = height > 0 ? height : 1;
+  const unit = lineUnit > 0 ? lineUnit : 1;
+  const widths = advances.length > 0 ? advances.map((advance) => (advance > 0 ? advance : 0.01)) : [0.5];
+  const chosen = chooseSize(widths, cardW, cardH, unit);
+  return {
+    fontSize: chosen.size,
+    lineHeight: chosen.size * unit,
+    lines: chosen.lines.map((line) => justifyLine(line, cardW)),
+  };
+}
+
+/**
+ * Largest type whose rows are each near the full width.
+ * A short string therefore sets larger type. Rows stack from the top.
  * `advances` are per-glyph widths at font size 1, in the face being set.
  */
 export function layoutJam(advances: number[], width: number, height: number): JamLayout {
-  const cardW = width > 0 ? width : 1;
-  const cardH = height > 0 ? height : 1;
-  const widths = advances.length > 0 ? advances.map((advance) => (advance > 0 ? advance : 0.01)) : [0.5];
-  let low = 0;
-  let high = cardH;
-  for (let step = 0; step < 48; step += 1) {
-    const mid = (low + high) / 2;
-    if (fits(widths, mid, cardW, cardH)) low = mid;
-    else high = mid;
-  }
-  let size = low > 0.5 ? low : Math.min(cardH, cardW);
-  let lines = wrapJam(widths, size, cardW);
-  if (lines.length > 0) {
-    const grown = cardH / lines.length;
-    if (grown > size + 0.1 && fits(widths, grown, cardW, cardH)) {
-      const next = wrapJam(widths, grown, cardW);
-      if (next.length === lines.length) {
-        size = grown;
-        lines = next;
-      }
-    }
-  }
-  const lineHeight = cardH / Math.max(1, lines.length);
-  return {
-    fontSize: size,
-    lineHeight,
-    lines: lines.map((line) => justifyLine(line, cardW)),
-  };
+  return pack(advances, width, height, 1);
 }
 
 export interface CapBand {
@@ -205,58 +352,12 @@ function justifyLine(line: WrappedLine, width: number): JamLine {
   return { start: line.start, end: line.end, gap };
 }
 
-function expandLines(lines: WrappedLine[], advances: number[], size: number, want: number): WrappedLine[] {
-  const out = lines.map((line) => ({ ...line }));
-  while (out.length < want) {
-    let best = -1;
-    let bestCount = 1;
-    for (let index = 0; index < out.length; index += 1) {
-      const count = out[index].end - out[index].start;
-      if (count > bestCount) {
-        bestCount = count;
-        best = index;
-      }
-    }
-    if (best < 0) break;
-    const line = out[best];
-    const mid = line.start + Math.ceil((line.end - line.start) / 2);
-    const widthOf = (start: number, end: number) =>
-      advances.slice(start, end).reduce((sum, advance) => sum + Math.max(0, advance), 0) * size;
-    out.splice(
-      best,
-      1,
-      { start: line.start, end: mid, width: widthOf(line.start, mid) },
-      { start: mid, end: line.end, width: widthOf(mid, line.end) },
-    );
-  }
-  return out;
-}
-
 /**
- * All-caps packing. Row height is the cap height, the rows tile the square,
- * and the largest size that can do that wins. A short string therefore uses fewer,
- * taller rows. A one-glyph row is scaled to the width by the view.
+ * Same breaking as Jam, with each row only as tall as the cap.
+ * The largest tight size wins. Rows that would have to go sparse to
+ * reach the bottom of the square stop short and leave that space empty.
  */
 export function layoutCrush(advances: number[], width: number, height: number, capRatio: number): JamLayout {
-  const cardW = width > 0 ? width : 1;
-  const cardH = height > 0 ? height : 1;
   const ratio = capRatio > 0 && capRatio <= 1 ? capRatio : 1;
-  const widths = advances.length > 0 ? advances.map((advance) => (advance > 0 ? advance : 0.01)) : [0.5];
-  let chosen: { size: number; lines: WrappedLine[] } | null = null;
-  for (let rows = 1; rows <= widths.length; rows += 1) {
-    const size = cardH / (rows * ratio);
-    const wrapped = wrapJam(widths, size, cardW);
-    if (wrapped.length > rows) continue;
-    chosen = { size, lines: expandLines(wrapped, widths, size, rows) };
-    break;
-  }
-  if (!chosen) {
-    return layoutJam(widths, cardW, cardH);
-  }
-  const lineHeight = cardH / Math.max(1, chosen.lines.length);
-  return {
-    fontSize: chosen.size,
-    lineHeight,
-    lines: chosen.lines.map((line) => justifyLine(line, cardW)),
-  };
+  return pack(advances, width, height, ratio);
 }
