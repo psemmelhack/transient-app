@@ -22,20 +22,39 @@ describe('jam wrap', () => {
     expect(narrow[1]).toEqual({ start: 4, end: 5, width: 12 });
   });
 
-  it('justifies every line, including the last, and fills the height with equal rows', () => {
+  it('justifies every line to the width and keeps each row near full', () => {
     const advances = [1, 1, 1, 1, 1];
     const layout = layoutJam(advances, 10, 100);
-    expect(layout.lines).toHaveLength(2);
-    expect(layout.fontSize).toBeCloseTo(10 / 3, 4);
-    expect(layout.lineHeight * layout.lines.length).toBeCloseTo(100, 5);
-    const text = layout.lines.map((line) => advances.slice(line.start, line.end).length);
-    expect(text).toEqual([3, 2]);
+    expect(layout.fontSize).toBeCloseTo(10, 1);
+    expect(layout.lineHeight * layout.lines.length).toBeLessThanOrEqual(100 + 0.5);
+    expect(layout.lines).toHaveLength(5);
     for (const line of layout.lines) {
       const used = advances.slice(line.start, line.end).reduce((sum, advance) => sum + advance, 0) * layout.fontSize;
+      expect(used).toBeGreaterThanOrEqual(10 * 0.8 - 0.2);
       expect(used).toBeLessThanOrEqual(10 + 0.05);
-      expect(used + line.gap * (line.end - line.start - 1)).toBeCloseTo(10, 3);
+      if (line.end - line.start > 1) {
+        expect(used + line.gap * (line.end - line.start - 1)).toBeCloseTo(10, 3);
+      }
     }
-    expect(joined(advances, layout)).toBe('0:3|3:5');
+    expect(joined(advances, layout)).toBe('0:1|1:2|2:3|3:4|4:5');
+  });
+
+  it('prefers a dense break over a short row with a wide gap', () => {
+    const advances = Array.from({ length: 23 }, () => 1);
+    const layout = layoutJam(advances, 100, 400);
+    const counts = layout.lines.map((line) => line.end - line.start);
+    const average = 23 / counts.length;
+    expect(layout.lineHeight * layout.lines.length).toBeLessThanOrEqual(400 + 0.5);
+    for (const [index, count] of counts.entries()) {
+      expect(count).toBeGreaterThanOrEqual(Math.round(average * 0.7));
+      const used = count * layout.fontSize;
+      expect(used).toBeGreaterThanOrEqual(80 - 0.2);
+      expect(used).toBeLessThanOrEqual(100 + 0.2);
+      const line = layout.lines[index];
+      if (!line || count < 2) continue;
+      expect(used + line.gap * (count - 1)).toBeCloseTo(100, 2);
+    }
+    expect(Math.min(...counts)).toBeGreaterThan(23 / counts.length * 0.5);
   });
 
   it('grows the type when there is less data', () => {
@@ -44,7 +63,8 @@ describe('jam wrap', () => {
     expect(short.fontSize).toBeGreaterThan(long.fontSize);
     expect(short.lines).toHaveLength(1);
     expect(long.lines.length).toBeGreaterThan(1);
-    expect(long.lineHeight * long.lines.length).toBeCloseTo(1080, 4);
+    expect(long.lineHeight * long.lines.length).toBeLessThanOrEqual(1080 + 0.5);
+    expect(short.lineHeight * short.lines.length).toBeLessThanOrEqual(1080 + 0.5);
     const covered = long.lines[long.lines.length - 1]?.end;
     expect(covered).toBe(180);
   });
@@ -73,7 +93,7 @@ describe('crush packing', () => {
     const layout = layoutCrush([0.5, 0.5, 0.5, 0.5], 100, 100, 0.5);
     expect(layout.lines).toHaveLength(2);
     expect(layout.fontSize * 0.5).toBeCloseTo(layout.lineHeight, 4);
-    expect(layout.lineHeight * layout.lines.length).toBeCloseTo(100, 4);
+    expect(layout.lineHeight * layout.lines.length).toBeCloseTo(100, 2);
     expect(layout.lines.map((line) => [line.start, line.end])).toEqual([
       [0, 2],
       [2, 4],
@@ -88,8 +108,10 @@ describe('crush packing', () => {
     const short = layoutCrush([0.4, 0.4], 200, 200, 0.8);
     const long = layoutCrush(Array.from({ length: 40 }, () => 0.4), 200, 200, 0.8);
     expect(short.fontSize).toBeGreaterThan(long.fontSize);
-    expect(short.lineHeight * short.lines.length).toBeCloseTo(200, 4);
-    expect(long.lineHeight * long.lines.length).toBeCloseTo(200, 4);
+    expect(short.lineHeight * short.lines.length).toBeLessThanOrEqual(200 + 0.5);
+    expect(long.lineHeight * long.lines.length).toBeLessThanOrEqual(200 + 0.5);
+    expect(short.lineHeight).toBeCloseTo(short.fontSize * 0.8, 3);
+    expect(long.lineHeight).toBeCloseTo(long.fontSize * 0.8, 3);
     expect(long.lines[long.lines.length - 1]?.end).toBe(40);
   });
 

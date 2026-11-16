@@ -291,6 +291,7 @@ function Jam({ node }: { node: JamNode }) {
         inset: 0,
         display: 'flex',
         flexDirection: 'column',
+        justifyContent: 'flex-start',
         overflow: 'hidden',
         color: node.color,
         fontKerning: 'none',
@@ -331,8 +332,8 @@ function Jam({ node }: { node: JamNode }) {
             key={lineIndex}
             data-jam-line=""
             style={{
-              flex: '1 1 0',
-              minHeight: 0,
+              flex: '0 0 auto',
+              height: ready.layout.lineHeight,
               minWidth: 0,
               display: 'flex',
               flexDirection: 'row',
