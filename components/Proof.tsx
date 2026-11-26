@@ -10,7 +10,7 @@ export function Proof({ id }: { id: string }) {
   const moment = exampleMoment(EXAMPLE_INSTANT);
   const scene = buildScene(style, moment, preset.sampleMessage, EXAMPLE_INSTANT);
   return (
-    <div style={{ height: '100%', overflow: 'auto', background: scene.background }}>
+    <div style={{ height: '100%', overflow: 'auto', backgroundColor: scene.background, backgroundImage: scene.gradient ?? 'none' }}>
       <CompositionStage scene={scene} full />
     </div>
   );

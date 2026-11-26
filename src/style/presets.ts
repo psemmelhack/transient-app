@@ -1,3 +1,4 @@
+import { DEFAULT_GRADIENT } from '../color/gradient';
 import { resolvedFormat } from '../composition/formats';
 import { DEFAULT_MADE_SEED } from '../composition/madeSeed';
 import { defaultMeasurements } from '../data/plugins';
@@ -174,6 +175,8 @@ export function styleFromPreset(preset: Preset, previous?: Style): Style {
     measurements: previous?.measurements ?? defaultMeasurements(),
     temperatureUnit: previous?.temperatureUnit ?? 'F',
     photoTone: previous?.photoTone ?? 0,
+    backgroundFill: 'solid',
+    gradient: previous?.gradient ?? DEFAULT_GRADIENT,
   };
 }
 

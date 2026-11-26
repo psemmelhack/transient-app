@@ -116,6 +116,18 @@ describe('saved style', () => {
     expect(sanitizeStyle(saved).photoTone).toBe(0.45);
     expect(sanitizeStyle({ ...saved, photoTone: 4 }).photoTone).toBe(1);
     expect(sanitizeStyle({ ...saved, photoTone: Number.NaN }).photoTone).toBe(0);
+    const gradient = sanitizeStyle({
+      ...defaultStyle(),
+      backgroundFill: 'gradient',
+      gradient: { stops: 3, colors: ['#112233', '#abcdef', 'not-a-color'], angle: 400 },
+    });
+    expect(gradient.backgroundFill).toBe('gradient');
+    expect(gradient.gradient.stops).toBe(3);
+    expect(gradient.gradient.colors[0]).toBe('#112233');
+    expect(gradient.gradient.colors[1]).toBe('#ABCDEF');
+    expect(gradient.gradient.colors[2]).toBe(defaultStyle().gradient.colors[2]);
+    expect(gradient.gradient.angle).toBe(40);
+    expect(sanitizeStyle({ ...defaultStyle(), backgroundFill: 'nope' }).backgroundFill).toBe('solid');
   });
 
   it('overrides a stored Story or Feed ratio and keeps every other field', () => {

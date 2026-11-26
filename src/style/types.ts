@@ -3,6 +3,15 @@ import type { FormatId } from '../composition/formats';
 export type LayoutMode = 'poster' | 'quiet' | 'note' | 'jam' | 'crush';
 export type Align = 'left' | 'center' | 'right';
 export type BackgroundMode = 'auto' | 'manual';
+export type BackgroundFill = 'solid' | 'gradient';
+
+/** Two or three stops. The third color is kept when the card is showing two. */
+export interface CardGradient {
+  stops: 2 | 3;
+  colors: [string, string, string];
+  /** CSS linear-gradient angle, degrees. */
+  angle: number;
+}
 export type TempUnit = 'F' | 'C' | 'both';
 
 export interface Style {
@@ -14,6 +23,9 @@ export interface Style {
   textColor: string;
   backgroundColor: string;
   backgroundMode: BackgroundMode;
+  /** Solid keeps the flat color. Gradient paints `gradient` and leaves the photo alone. */
+  backgroundFill: BackgroundFill;
+  gradient: CardGradient;
   /** When set, footer type uses this instead of the hero color. Preset 01. */
   footerColor: string | null;
   displayFontId: string;

@@ -1,9 +1,10 @@
 import { complementaryBackground } from '../color/complement';
+import { gradientReads, randomGradient } from '../color/gradient';
 import { isHex, normalizeHex } from '../color/oklch';
 import { formatChoiceEnabled, type FormatId } from '../composition/formats';
 import { madeCell, seedForCell } from '../composition/madeSeed';
 import { styleFromPreset, type Preset } from './presets';
-import type { Align, LayoutMode, Style, TempUnit } from './types';
+import type { Align, BackgroundFill, LayoutMode, Style, TempUnit } from './types';
 
 function leavePreset(style: Style, patch: Partial<Style>): Style {
   return { ...style, presetId: null, ...patch };
@@ -111,8 +112,48 @@ export function withoutPhotoTone(style: Style): Style {
 export function withAutoBackground(style: Style): Style {
   return leavePreset(style, {
     backgroundMode: 'auto',
+    backgroundFill: 'solid',
     backgroundColor: complementaryBackground(style.textColor),
     footerColor: null,
+  });
+}
+
+/** Solid is the flat color. Gradient is its own fill and does not touch the photo. */
+export function withBackgroundFill(style: Style, fill: BackgroundFill): Style {
+  if (fill === 'solid') {
+    if (style.backgroundFill === 'solid') return style;
+    return leavePreset(style, { backgroundFill: 'solid' });
+  }
+  const gradient = gradientReads(style.textColor, style.gradient)
+    ? style.gradient
+    : randomGradient(style.textColor, style.gradient.stops);
+  if (style.backgroundFill === 'gradient' && gradient === style.gradient) return style;
+  return leavePreset(style, { backgroundFill: 'gradient', gradient });
+}
+
+export function withGradientStops(style: Style, stops: 2 | 3): Style {
+  if (style.backgroundFill === 'gradient' && style.gradient.stops === stops) return style;
+  return leavePreset(style, { backgroundFill: 'gradient', gradient: { ...style.gradient, stops } });
+}
+
+export function withGradientColor(style: Style, index: number, hex: string): Style {
+  if (!isHex(hex) || (index !== 0 && index !== 1 && index !== 2)) return style;
+  const colors = [...style.gradient.colors] as [string, string, string];
+  colors[index] = normalizeHex(hex);
+  return leavePreset(style, { backgroundFill: 'gradient', gradient: { ...style.gradient, colors } });
+}
+
+export function withGradientAngle(style: Style, angle: number): Style {
+  if (!Number.isFinite(angle)) return style;
+  const next = ((Math.round(angle) % 360) + 360) % 360;
+  if (style.backgroundFill === 'gradient' && style.gradient.angle === next) return style;
+  return leavePreset(style, { backgroundFill: 'gradient', gradient: { ...style.gradient, angle: next } });
+}
+
+export function withRandomGradient(style: Style, rng: () => number = Math.random): Style {
+  return leavePreset(style, {
+    backgroundFill: 'gradient',
+    gradient: randomGradient(style.textColor, style.gradient.stops, rng),
   });
 }
 
