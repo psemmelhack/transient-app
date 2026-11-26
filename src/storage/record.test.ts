@@ -13,7 +13,7 @@ const sensors: SensorSample = {
   battery: null,
 };
 
-const scene: Scene = { width: 1080, height: 1080, background: '#fff', nodes: [] };
+const scene: Scene = { width: 1080, height: 1080, background: '#fff', gradient: null, nodes: [] };
 
 describe('transient record', () => {
   it('keeps a recipient only when a name was given', () => {

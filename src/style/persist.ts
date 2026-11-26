@@ -1,3 +1,4 @@
+import { DEFAULT_GRADIENT, normalizeAngle } from '../color/gradient';
 import { isHex, normalizeHex } from '../color/oklch';
 import { getFont } from '../composition/fonts';
 import { isMadeCell, seedForCell } from '../composition/madeSeed';
@@ -6,7 +7,7 @@ import { RECIPES } from '../composition/recipes';
 import { defaultMeasurements } from '../data/plugins';
 import { defaultStyle } from './presets';
 import { readStyleRaw, writeStyleRaw } from './styleStore';
-import type { Align, BackgroundMode, LayoutMode, Style, TempUnit } from './types';
+import type { Align, BackgroundFill, BackgroundMode, CardGradient, LayoutMode, Style, TempUnit } from './types';
 
 export const STYLE_KEY = 'transient.style.v1';
 
@@ -28,6 +29,26 @@ function isUnit(value: unknown): value is TempUnit {
 
 function isMode(value: unknown): value is BackgroundMode {
   return value === 'auto' || value === 'manual';
+}
+
+function isFill(value: unknown): value is BackgroundFill {
+  return value === 'solid' || value === 'gradient';
+}
+
+function gradientOf(value: unknown): CardGradient {
+  const base = DEFAULT_GRADIENT;
+  if (!value || typeof value !== 'object') return base;
+  const raw = value as Partial<CardGradient>;
+  const incoming = Array.isArray(raw.colors) ? raw.colors : [];
+  const colors = [0, 1, 2].map((index) => {
+    const color = incoming[index];
+    return typeof color === 'string' && isHex(color) ? normalizeHex(color) : base.colors[index];
+  }) as [string, string, string];
+  return {
+    stops: raw.stops === 3 ? 3 : 2,
+    colors,
+    angle: normalizeAngle(typeof raw.angle === 'number' ? raw.angle : base.angle),
+  };
 }
 
 function madeVariantOf(value: unknown): number {
@@ -55,6 +76,8 @@ export function sanitizeStyle(input: unknown): Style {
         ? normalizeHex(raw.backgroundColor)
         : base.backgroundColor,
     backgroundMode: isMode(raw.backgroundMode) ? raw.backgroundMode : base.backgroundMode,
+    backgroundFill: isFill(raw.backgroundFill) ? raw.backgroundFill : 'solid',
+    gradient: gradientOf(raw.gradient),
     footerColor:
       typeof raw.footerColor === 'string' && isHex(raw.footerColor) ? normalizeHex(raw.footerColor) : null,
     displayFontId: display.id,

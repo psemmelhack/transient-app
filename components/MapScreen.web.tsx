@@ -7,6 +7,7 @@ import { capturedUnshared, emptyLibrary, libraryShareLabel } from '../src/ui/act
 import { Icon } from './Icons';
 import { publicAssetUrl } from '../src/web/publicUrl';
 import { ink, line, muted, paper, ui } from './theme';
+import { gradientCss } from '../src/color/gradient';
 import { clusterTransients } from '../src/map/cluster';
 import { openLibraryRow, panelShowsIndex, selectMapPin } from '../src/map/libraryDetail';
 import { SHELL_HEADER_PADDING_RIGHT, useNativeShell } from '../src/native/shell';
@@ -330,7 +331,10 @@ function LibraryRow({ record, url, onOpen }: { record: TransientRecord; url?: st
 
 function Thumbnail({ record, url }: { record: TransientRecord; url?: string }) {
   if (url && record.png.size > 0) return <img src={url} alt="" style={thumb} />;
-  const background = record.style?.backgroundColor || paper;
+  const background =
+    record.style?.backgroundFill === 'gradient' && record.style.gradient
+      ? gradientCss(record.style.gradient)
+      : record.style?.backgroundColor || paper;
   const color = record.style?.textColor || ink;
   return (
     <span aria-hidden style={{ ...thumb, background, display: 'flex', alignItems: 'flex-end', justifyContent: 'flex-end', padding: 6 }}>

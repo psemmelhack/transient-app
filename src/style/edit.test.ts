@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { complementaryBackground } from '../color/complement';
 import { contrastRatio } from '../color/contrast';
 import { formatChoiceEnabled } from '../composition/formats';
-import { withAutoBackground, withBackground, withFormat, withLayout, withManualBackground, withMeasurement, withPhotoTone, withPreset, withTextColor } from './edit';
+import { withAutoBackground, withBackground, withBackgroundFill, withFormat, withGradientColor, withLayout, withManualBackground, withMeasurement, withPhotoTone, withPreset, withRandomGradient, withTextColor } from './edit';
 import { defaultStyle, presetById } from './presets';
 
 describe('style edits', () => {
@@ -108,5 +108,30 @@ describe('style edits', () => {
     expect(held.backgroundColor).toBe('#D2231C');
     expect(withPhotoTone(held, 0).photoTone).toBe(0);
     expect(withBackground(current, '#1E3A2D').photoTone).toBe(0);
+  });
+
+  it('keeps a gradient off the photo tone and on the saved palette', () => {
+    const current = defaultStyle();
+    const on = withBackgroundFill(current, 'gradient');
+    expect(on.backgroundFill).toBe('gradient');
+    expect(on.photoTone).toBe(0);
+    expect(on.presetId).toBeNull();
+    const colored = withGradientColor(on, 2, '#aabbcc');
+    expect(colored.gradient.colors[2]).toBe('#AABBCC');
+    expect(colored.backgroundFill).toBe('gradient');
+    const solid = withBackgroundFill(colored, 'solid');
+    expect(solid.backgroundFill).toBe('solid');
+    expect(solid.gradient.colors[2]).toBe('#AABBCC');
+    let seed = 3;
+    const random = withRandomGradient(solid, () => {
+      seed = (seed * 16807) % 2147483647;
+      return (seed & 0xffff) / 0xffff;
+    });
+    expect(random.backgroundFill).toBe('gradient');
+    expect(random.gradient.colors.join(',')).not.toBe(solid.gradient.colors.join(','));
+    expect(random.photoTone).toBe(0);
+    const preset = withPreset(random, presetById('05'));
+    expect(preset.backgroundFill).toBe('solid');
+    expect(preset.gradient).toEqual(random.gradient);
   });
 });

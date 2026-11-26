@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { contrastRatio, formatContrast } from '../src/color/contrast';
+import { GRADIENT_ANGLES, gradientContrast } from '../src/color/gradient';
 import type { PosterPhoto } from '../src/composition/posterPhoto';
 import { isHex, normalizeHex } from '../src/color/oklch';
 import { FORMAT_ORDER, FORMATS, formatChoiceEnabled } from '../src/composition/formats';
@@ -13,6 +14,11 @@ import {
   withAlign,
   withAutoBackground,
   withBackground,
+  withBackgroundFill,
+  withGradientAngle,
+  withGradientColor,
+  withGradientStops,
+  withRandomGradient,
   remixMade,
   withDisplayFont,
   withFormat,
@@ -233,29 +239,35 @@ export function Parameters({
         <Swatches value={style.textColor} onPick={(hex) => onChange(withTextColor(style, hex))} />
         <HexField label="Text color hex" value={style.textColor} onCommit={(hex) => onChange(withTextColor(style, hex))} />
         <div style={{ ...minorLabel, marginTop: 16 }}>Background</div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
-          <button
-            type="button"
-            aria-pressed={style.backgroundMode === 'auto'}
-            onClick={() => onChange(style.backgroundMode === 'auto' ? withManualBackground(style) : withAutoBackground(style))}
-            style={{
-              ...textChoice,
-              fontFamily: ui,
-              fontWeight: 500,
-              fontSize: 12,
-              letterSpacing: '0.14em',
-              textTransform: 'uppercase',
-              color: style.backgroundMode === 'auto' ? paper : ink,
-              background: style.backgroundMode === 'auto' ? ink : 'transparent',
-              boxShadow: style.backgroundMode === 'auto' ? 'none' : `inset 0 0 0 1px ${line}`,
-            }}
-          >
-            Auto
-          </button>
-          <span style={{ fontFamily: ui, fontWeight: 400, fontSize: 12, letterSpacing: '0.04em', color: muted }}>{formatContrast(contrastRatio(style.textColor, style.backgroundColor))}</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
+          <FillChoice label="Solid" pressed={style.backgroundFill !== 'gradient'} onPress={() => onChange(withBackgroundFill(style, 'solid'))} />
+          <FillChoice label="Gradient" pressed={style.backgroundFill === 'gradient'} onPress={() => onChange(withBackgroundFill(style, 'gradient'))} />
+          {style.backgroundFill === 'gradient' ? (
+            <button type="button" aria-label="Randomize gradient" onClick={() => onChange(withRandomGradient(style))} style={iconChoice(false)}>
+              <Icon name="die" size={18} color={ink} />
+            </button>
+          ) : (
+            <button
+              type="button"
+              aria-pressed={style.backgroundMode === 'auto'}
+              onClick={() => onChange(style.backgroundMode === 'auto' ? withManualBackground(style) : withAutoBackground(style))}
+              style={fillChoice(style.backgroundMode === 'auto')}
+            >
+              Auto
+            </button>
+          )}
+          <span style={{ fontFamily: ui, fontWeight: 400, fontSize: 12, letterSpacing: '0.04em', color: muted }}>
+            {formatContrast(style.backgroundFill === 'gradient' ? gradientContrast(style.textColor, style.gradient) : contrastRatio(style.textColor, style.backgroundColor))}
+          </span>
         </div>
-        <Swatches value={style.backgroundColor} onPick={(hex) => onChange(withBackground(style, hex, engageTone))} />
-        <HexField label="Background color hex" value={style.backgroundColor} onCommit={(hex) => onChange(withBackground(style, hex, engageTone))} />
+        {style.backgroundFill === 'gradient' ? (
+          <GradientFields style={style} onChange={onChange} covered={Boolean(photo)} />
+        ) : (
+          <>
+            <Swatches value={style.backgroundColor} onPick={(hex) => onChange(withBackground(style, hex, engageTone))} />
+            <HexField label="Background color hex" value={style.backgroundColor} onCommit={(hex) => onChange(withBackground(style, hex, engageTone))} />
+          </>
+        )}
       </Section>
 
       <Section label="Data">
@@ -423,7 +435,61 @@ function IconChoice({ icon, label, pressed, onPress }: { icon: IconName; label: 
   );
 }
 
-function Swatches({ value, onPick }: { value: string; onPick: (hex: string) => void }) {
+function FillChoice({ label, pressed, onPress, name = label }: { label: string; pressed: boolean; onPress: () => void; name?: string }) {
+  return (
+    <button type="button" aria-label={name} aria-pressed={pressed} onClick={onPress} style={fillChoice(pressed)}>
+      {label}
+    </button>
+  );
+}
+
+function GradientFields({ style, onChange, covered }: { style: Style; onChange: (style: Style) => void; covered: boolean }) {
+  const fields = style.gradient.stops === 3
+    ? ([{ index: 0, name: 'Start' }, { index: 1, name: 'Middle' }, { index: 2, name: 'End' }] as const)
+    : ([{ index: 0, name: 'Start' }, { index: 2, name: 'End' }] as const);
+  return (
+    <div>
+      <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+        <FillChoice label="2" name="Two colors" pressed={style.gradient.stops === 2} onPress={() => onChange(withGradientStops(style, 2))} />
+        <FillChoice label="3" name="Three colors" pressed={style.gradient.stops === 3} onPress={() => onChange(withGradientStops(style, 3))} />
+      </div>
+      {fields.map(({ index, name }) => {
+        const hex = style.gradient.colors[index] ?? style.gradient.colors[0];
+        return (
+          <div key={name} style={{ marginBottom: 12 }}>
+            <div style={minorLabel}>{name}</div>
+            <Swatches value={hex} label={`${name} color`} onPick={(next) => onChange(withGradientColor(style, index, next))} />
+            <HexField label={`${name} color hex`} value={hex} onCommit={(next) => onChange(withGradientColor(style, index, next))} />
+          </div>
+        );
+      })}
+      <div style={minorLabel}>Angle</div>
+      <div style={{ display: 'flex', gap: 8 }}>
+        {GRADIENT_ANGLES.map((angle) => (
+          <button
+            key={angle}
+            type="button"
+            aria-label={`Gradient angle ${angle}`}
+            aria-pressed={style.gradient.angle === angle}
+            onClick={() => onChange(withGradientAngle(style, angle))}
+            style={iconChoice(style.gradient.angle === angle)}
+          >
+            <span style={{ display: 'inline-flex', transform: `rotate(${angle}deg)` }}>
+              <Icon name="angle" size={18} color={ink} />
+            </span>
+          </button>
+        ))}
+      </div>
+      {covered ? (
+        <p style={{ fontFamily: ui, fontWeight: 400, fontSize: 12, lineHeight: 1.45, color: muted, margin: '10px 0 0' }}>
+          The photo covers this. Clear it to show the gradient.
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+function Swatches({ value, onPick, label = 'Custom color' }: { value: string; onPick: (hex: string) => void; label?: string }) {
   const current = normalizeHex(value);
   return (
     <HScroll gap={8}>
@@ -452,7 +518,7 @@ function Swatches({ value, onPick }: { value: string; onPick: (hex: string) => v
       })}
       <input
         type="color"
-        aria-label="Custom color"
+        aria-label={label}
         value={current}
         onChange={(event) => onPick(event.target.value)}
         style={{ width: 28, height: 28, boxSizing: 'border-box', flex: 'none', padding: 0, border: 'none', background: 'transparent', cursor: 'pointer' }}
@@ -602,6 +668,20 @@ const chipButton: CSSProperties = {
   textAlign: 'left',
   boxSizing: 'border-box',
 };
+
+function fillChoice(pressed: boolean): CSSProperties {
+  return {
+    ...textChoice,
+    fontFamily: ui,
+    fontWeight: 500,
+    fontSize: 12,
+    letterSpacing: '0.14em',
+    textTransform: 'uppercase',
+    color: pressed ? paper : ink,
+    background: pressed ? ink : 'transparent',
+    boxShadow: pressed ? 'none' : `inset 0 0 0 1px ${line}`,
+  };
+}
 
 const textChoice: CSSProperties = {
   border: 'none',

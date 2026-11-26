@@ -57,6 +57,7 @@ export function randomStyle(current: Style, rng: () => number = Math.random): St
     textColor,
     backgroundColor,
     backgroundMode: 'auto',
+    backgroundFill: 'solid',
     footerColor: null,
     displayFontId: display.id,
     monoFontId: mono.id,

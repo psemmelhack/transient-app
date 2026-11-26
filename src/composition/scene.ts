@@ -2,6 +2,7 @@ import { measurementLines, isExtendedEnabled } from '../data/plugins';
 import { deviceTimeZone, type Moment } from '../data/moment';
 import { linesForCard, omitSupersededAccuracy, type TelemetryLine } from '../data/telemetry';
 import { layoutSpreadTelemetry, POSTER_HERO_BAND, TELEMETRY_COLUMN_CAP, TELEMETRY_FONT_FLOOR } from './telemetryFit';
+import { gradientCss } from '../color/gradient';
 import { legibilityFor, type PosterPhoto } from './posterPhoto';
 import type { Style } from '../style/types';
 import { FORMATS } from './formats';
@@ -19,6 +20,8 @@ export interface Scene {
   width: number;
   height: number;
   background: string;
+  /** OKLCH-sampled linear gradient. Absent for a flat color or a photo. */
+  gradient: string | null;
   nodes: SceneNode[];
   /** Cover-cropped photo and the veil behind the type. Absent when the card is flat color. */
   photo?: { href: string; scrim: string } | null;
@@ -303,11 +306,13 @@ export function buildScene(
   const painted = look ? paintForPhoto(style, look) : style;
   const format = FORMATS[painted.format];
   const layer = photo && look ? { href: photo.jpeg, scrim: look.scrim } : null;
+  const wash = cardWash(painted, Boolean(layer));
   if (!moment) {
     return {
       width: format.width,
       height: format.height,
-      background: painted.backgroundColor,
+      background: wash.background,
+      gradient: wash.gradient,
       photo: layer,
       nodes: [
         {
@@ -331,10 +336,17 @@ export function buildScene(
   return {
     width: format.width,
     height: format.height,
-    background: painted.backgroundColor,
+    background: wash.background,
+    gradient: wash.gradient,
     photo: layer,
     nodes,
   };
+}
+
+/** A photo covers the card, so the gradient waits until the photo is cleared. */
+function cardWash(style: Style, covered: boolean): { background: string; gradient: string | null } {
+  if (covered || style.backgroundFill !== 'gradient') return { background: style.backgroundColor, gradient: null };
+  return { background: style.gradient.colors[0], gradient: gradientCss(style.gradient) };
 }
 
 /** Keep each style's colors when they still read. Otherwise fall back to paper or ink. Fonts stay. */

@@ -19,7 +19,8 @@ export type IconName =
   | 'feed'
   | 'square'
   | 'camera'
-  | 'refresh';
+  | 'refresh'
+  | 'angle';
 
 export function Icon({
   name,
@@ -135,6 +136,12 @@ export function Icon({
       {name === 'story' && <Rect x="8" y="3.5" width="8" height="17" rx="1.4" {...stroke} />}
       {name === 'feed' && <Rect x="6.5" y="4" width="11" height="16" rx="1.4" {...stroke} />}
       {name === 'square' && <Rect x="5" y="5" width="14" height="14" rx="1.4" {...stroke} />}
+      {name === 'angle' && (
+        <>
+          <Line x1="12" y1="18" x2="12" y2="6.5" {...stroke} />
+          <Path d="M8.2 10 12 6.2 15.8 10" {...stroke} />
+        </>
+      )}
       {name === 'camera' && (
         <>
           <Path d="M8.1 7.4 9.3 5.7h5.4l1.2 1.7H19a1 1 0 0 1 1 1V18a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V8.4a1 1 0 0 1 1-1h3.1z" {...stroke} />

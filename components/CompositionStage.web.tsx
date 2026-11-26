@@ -70,7 +70,8 @@ export const CompositionStage = forwardRef<HTMLDivElement, Props>(function Compo
         aspectRatio: full ? undefined : `${scene.width} / ${scene.height}`,
         position: 'relative',
         overflow: 'hidden',
-        background: scene.background,
+        backgroundColor: scene.background,
+        backgroundImage: scene.gradient ?? 'none',
       }}
     >
       <div
@@ -84,12 +85,19 @@ export const CompositionStage = forwardRef<HTMLDivElement, Props>(function Compo
           top: 0,
           transform: `scale(${scale})`,
           transformOrigin: 'top left',
-          background: scene.background,
+          backgroundColor: scene.background,
+          backgroundImage: scene.gradient ?? 'none',
           overflow: 'hidden',
           fontSynthesis: 'none',
           fontKerning: 'normal',
         }}
       >
+        {scene.gradient ? (
+          <div
+            data-role="poster-gradient"
+            style={{ position: 'absolute', inset: 0, backgroundImage: scene.gradient, pointerEvents: 'none' }}
+          />
+        ) : null}
         {scene.photo ? (
           <>
             <img

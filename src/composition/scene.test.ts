@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { exampleMoment, EXAMPLE_INSTANT } from '../data/moment';
 import type { SensorSample } from '../data/telemetry';
 import { contrastRatio } from '../color/contrast';
-import { withDisplayFont, withLayout, withMeasurement } from '../style/edit';
+import { withBackgroundFill, withDisplayFont, withLayout, withMeasurement } from '../style/edit';
 import { PRESETS, defaultStyle, presetById, styleFromPreset } from '../style/presets';
 import { jamFields, jamText } from './jam';
 import { noteColumns, noteFontSize, noteRhythm, wrapNote, wrappedLineCount } from './note';
@@ -651,5 +651,22 @@ describe('jam layout', () => {
     expect(moving.jam.text.split('\u00b112m').length - 1).toBe(1);
     const still = jamNode(style, 'Here', { ...moment, speed: 0.2, sensors });
     expect(still.jam.text.includes('mph')).toBe(false);
+  });
+});
+
+describe('gradient background', () => {
+  it('paints a gradient behind the type and lets a photo cover it', () => {
+    const style = withBackgroundFill(defaultStyle(), 'gradient');
+    const scene = buildScene(style, moment, 'Hi');
+    expect(scene.gradient).toContain('linear-gradient(');
+    expect(scene.gradient).toContain(style.gradient.colors[0]);
+    expect(scene.gradient).toContain(style.gradient.colors[2]);
+    expect(scene.background).toBe(style.gradient.colors[0]);
+    const photo = { jpeg: 'data:image/jpeg;base64,/9j/4AAQ', luminance: 0.2 };
+    const covered = buildScene(style, moment, 'Hi', EXAMPLE_INSTANT, photo);
+    expect(covered.gradient).toBeNull();
+    expect(covered.photo?.href).toBe(photo.jpeg);
+    expect(covered.background).toBe(style.backgroundColor);
+    expect(buildScene(defaultStyle(), moment, 'Hi').gradient).toBeNull();
   });
 });

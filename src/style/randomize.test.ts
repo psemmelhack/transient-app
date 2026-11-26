@@ -20,6 +20,7 @@ describe('randomStyle', () => {
       expect(getFont(next.monoFontId).category).toBe('mono');
       expect(contrastRatio(next.textColor, next.backgroundColor)).toBeGreaterThanOrEqual(MIN_AUTO_CONTRAST);
       expect(next.backgroundMode).toBe('auto');
+      expect(next.backgroundFill).toBe('solid');
       expect(next.presetId).toBeNull();
     }
   });
